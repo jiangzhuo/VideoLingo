@@ -18,10 +18,49 @@ def split_by_mark(nlp):
     # join with joiner
     input_text = joiner.join(chunks.text.to_list())
 
-    doc = nlp(input_text)
-    assert doc.has_annotation("SENT_START")
+    # Split input_text into smaller chunks
+    max_bytes = 49000  # Slightly less than the max to be safe
+    text_chunks = []
+    current_chunk = ""
+    
+    if joiner:
+        sentences = input_text.split(joiner)
+    else:
+        sentences = [input_text]  # Treat the entire input as one sentence if no joiner
 
-    sentences_by_mark = [sent.text for sent in doc.sents]
+    for sentence in sentences:
+        if len((current_chunk + sentence).encode('utf-8')) > max_bytes:
+            text_chunks.append(current_chunk)
+            current_chunk = sentence
+        else:
+            current_chunk += (joiner if current_chunk and joiner else "") + sentence
+    
+    if current_chunk:
+        text_chunks.append(current_chunk)
+
+    sentences_by_mark = []
+    for chunk in text_chunks:
+        # Ensure each chunk is within the byte limit
+        if len(chunk.encode('utf-8')) > max_bytes:
+            sub_chunks = []
+            current_sub_chunk = ""
+            for char in chunk:
+                if len((current_sub_chunk + char).encode('utf-8')) > max_bytes:
+                    sub_chunks.append(current_sub_chunk)
+                    current_sub_chunk = char
+                else:
+                    current_sub_chunk += char
+            if current_sub_chunk:
+                sub_chunks.append(current_sub_chunk)
+            
+            for sub_chunk in sub_chunks:
+                doc = nlp(sub_chunk)
+                assert doc.has_annotation("SENT_START")
+                sentences_by_mark.extend([sent.text for sent in doc.sents])
+        else:
+            doc = nlp(chunk)
+            assert doc.has_annotation("SENT_START")
+            sentences_by_mark.extend([sent.text for sent in doc.sents])
 
     with open("output/log/sentence_by_mark.txt", "w", encoding="utf-8") as output_file:
         for i, sentence in enumerate(sentences_by_mark):
