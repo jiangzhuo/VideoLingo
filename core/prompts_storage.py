@@ -53,7 +53,7 @@ You are a professional video translation expert and terminology consultant. Your
 
 ### Task Description 
 For the provided original {src_language} video text, you need to:
-1. Summarize the video's main topic in one sentence
+1. Summarize the video's main topic in a concise, Twitter-friendly paragraph (max 280 characters)
 2. Extract professional terms and names that appear in the video, and provide {TARGET_LANGUAGE} translations or suggest keeping the original language terms. Avoid extracting simple, common words.
 3. For each translated term or name, provide a brief explanation
 
@@ -61,7 +61,7 @@ For the provided original {src_language} video text, you need to:
 Please think in two steps, processing the text line by line:  
 1. Topic summarization:
    - Quickly skim through the entire text to understand the general idea
-   - Summarize the topic in one concise sentence
+   - Summarize the video's main topic in a concise, Twitter-friendly paragraph
 2. Term and name extraction:
    - Carefully read the entire text, marking professional terms and names
    - For each term or name, provide a {TARGET_LANGUAGE} translation or suggest keeping the original, only the word itself is needed, not the pronunciation
@@ -71,7 +71,7 @@ Please think in two steps, processing the text line by line:
 ### Output Format
 Please output your analysis results in the following JSON format, where <> represents placeholders:
 {{
-    "theme": "<Briefly summarize the theme of this video in 1 sentence>",
+    "theme": "<Briefly summarize the theme of this video in Twitter-friendly paragraph (max 280 characters)>",
     "terms": [
         {{
             "original": "<Term or name 1 in the {src_language}>",
@@ -90,7 +90,7 @@ Please output your analysis results in the following JSON format, where <> repre
 ### Single Output Example (Using French as an example)
 
 {{
-    "theme": "Ce vidéo résume le musée du Louvre à Paris.",
+    "theme": "Le musée du Louvre à Paris est l'un des plus célèbres et visités au monde. Situé au cœur de la capitale française, il abrite une vaste collection d'œuvres d'art représentant plusieurs millénaires d'histoire et de cultures diverses. Parmi les trésors emblématiques du musée figurent des chefs-d'œuvre comme La Joconde de Léonard de Vinci, la Vénus de Milo et la Victoire de Samothrace. L'architecture du Louvre, ancien palais royal, est également remarquable, notamment avec la pyramide de verre conçue par I.M. Pei. Le musée a évolué à travers les siècles, devenant un centre culturel majeur. Les visiteurs y découvrent une riche diversité d'expositions allant des antiquités égyptiennes aux peintures de la Renaissance, en passant par les sculptures grecques et romaines.",
     "terms": [
         {{
             "original": "Mona Lisa",
