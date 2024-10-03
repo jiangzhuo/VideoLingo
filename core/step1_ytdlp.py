@@ -20,7 +20,7 @@ def download_video_ytdlp(url, save_path='output', resolution='1080'):
     os.makedirs(save_path, exist_ok=True)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best' if resolution == 'best' else f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',
-        'outtmpl': f'{save_path}/%(title)s.%(ext)s',
+        'outtmpl': f'{save_path}/%(id)s.%(ext)s',
         'noplaylist': True,
         'writethumbnail': True,
         'postprocessors': [{
