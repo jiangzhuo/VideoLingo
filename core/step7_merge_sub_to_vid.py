@@ -18,10 +18,10 @@ TRANS_OUTLINE_COLOR = '&H000000'
 TRANS_OUTLINE_WIDTH = 1 
 TRANS_BACK_COLOR = '&H33000000'
 
-def merge_subtitles_to_video():
+def merge_subtitles_to_video(output_path='output'):
     from config import RESOLUTION
     TARGET_WIDTH, TARGET_HEIGHT = RESOLUTION.split('x')
-    video_file = find_video_files()
+    video_file = find_video_files(output_path)
     output_video = "output/output_video_with_subs.mp4"
     os.makedirs(os.path.dirname(output_video), exist_ok=True)
 
