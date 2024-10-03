@@ -91,6 +91,9 @@ def get_latest_videos():
                 if duration > 900:
                     print(f"忽略长视频: {video['title']} (时长: {duration} 秒)")
                     continue
+                if duration < 0:
+                    print(f"忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
+                    continue
 
                 c.execute("SELECT * FROM videos WHERE channel_id=? AND video_id=?", (channel_id, video_id))
                 if c.fetchone() is None:
