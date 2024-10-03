@@ -131,9 +131,15 @@ def align_timestamp_main():
     # check if there's empty translation
     empty_rows = df_translate[df_translate['Translation'].str.len() == 0]
     if not empty_rows.empty:
-        console.print(Panel("[bold red]🚫 Detected empty translation rows! Please manually check the following rows in `output\log\translation_results_for_subtitles.xlsx` and fill them with appropriate content, then run again:[/bold red]"))
+        console.print(Panel("[bold red]🚫 Detected empty translation rows! These rows will be removed from the dataframe.[/bold red]"))
         console.print(empty_rows.index.tolist())
-        raise ValueError("Empty translation rows detected")
+        # Print out empty content
+        console.print("[bold yellow]Empty translation rows:[/bold yellow]")
+        for index, row in empty_rows.iterrows():
+            console.print(f"Row {index}: Source text = '{row['Source']}'")
+        df_translate = df_translate.drop(empty_rows.index)
+        df_translate = df_translate.reset_index(drop=True)
+        console.print(Panel("[bold green]✅ Empty rows have been removed from the dataframe.[/bold green]"))
     subtitle_output_configs = [ 
         ('src_subtitles.srt', ['Source']),
         ('trans_subtitles.srt', ['Translation']),
@@ -146,9 +152,16 @@ def align_timestamp_main():
     # for audio
     df_translate_for_audio = pd.read_excel('output/log/translation_results.xlsx')
     df_translate_for_audio['Translation'] = df_translate_for_audio['Translation'].apply(lambda x: str(x).strip('。').strip('，'))
-    if (df_translate_for_audio['Translation'].str.len() == 0).sum() > 0:
-        console.print(Panel("[bold red]🚫 Detected empty translation rows! Please manually check the empty rows in `output\log\translation_results.xlsx` and fill them with appropriate content, then run again.[/bold red]"))
-        raise ValueError("Empty translation rows detected")
+    empty_rows = df_translate_for_audio[df_translate_for_audio['Translation'].str.len() == 0]
+    if not empty_rows.empty:
+        console.print(Panel("[bold yellow]⚠️ Detected empty translation rows! These rows will be removed from the dataframe.[/bold yellow]"))
+        console.print(empty_rows.index.tolist())
+        console.print("[bold yellow]Empty translation rows:[/bold yellow]")
+        for index, row in empty_rows.iterrows():
+            console.print(f"Row {index}: Source text = '{row['Source']}'")
+        df_translate_for_audio = df_translate_for_audio.drop(empty_rows.index)
+        df_translate_for_audio = df_translate_for_audio.reset_index(drop=True)
+        console.print(Panel("[bold green]✅ Empty rows have been removed from the dataframe.[/bold green]"))
     subtitle_output_configs = [
         ('src_subs_for_audio.srt', ['Source']),
         ('trans_subs_for_audio.srt', ['Translation'])
