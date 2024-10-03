@@ -15,3 +15,6 @@ spacy==3.7.6
 streamlit==1.38.0
 yt-dlp==2024.8.6
 json-repair
+google-api-python-client
+schedule
+tweepy
