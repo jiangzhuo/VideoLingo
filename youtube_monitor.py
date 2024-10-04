@@ -395,7 +395,8 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         for error in res['errors']:
             print(f"错误代码: {error['code']}, 错误信息: {error['message']}")
     else:
-        print(f"推文发送成功，tweet_id: {res['data']['rest_id']}")
+        tweet_id = res['data']['notetweet_create']['tweet_results']['result']['rest_id']
+        print(f"推文发送成功，tweet_id: {tweet_id}")
         
 def run_scheduler():
     # 初始化数据库
