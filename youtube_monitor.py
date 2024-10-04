@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import shutil
 import sqlite3
@@ -280,6 +281,31 @@ def process_videos():
         conn.commit()
     finally:
         conn.close()
+def get_tweet_text(video_id):
+    summary_path = f'history/{video_id}/gpt_log/summary.json'
+
+    try:
+        with open(summary_path, 'r', encoding='utf-8') as f:
+            summary_data = json.load(f)
+        
+        if isinstance(summary_data, list) and len(summary_data) > 0:
+            tweet_text = summary_data[0]['response']['theme']
+            terms = summary_data[0]['response']['terms']
+        else:
+            tweet_text = summary_data['response']['theme']
+            terms = summary_data['response']['terms']
+        
+        if not tweet_text:
+            raise KeyError("Theme not found in summary data")
+        
+        tweet_text += "\n\n"
+        for term in terms:
+            tweet_text += f"\n#{term['original']} ({term['translation']})：{term['explanation']}\n"
+        
+        return tweet_text
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        print(f"Error reading summary for {video_id}: {str(e)}")
+        return None
 
 def post_twitters():
     conn = sqlite3.connect('youtube_videos.db')
@@ -288,80 +314,89 @@ def post_twitters():
     c.execute("SELECT channel_id, video_id, title, published_at, channel_title FROM videos WHERE downloaded = 1 AND processed = 1 AND twitter = 0")
     videos = c.fetchall()
 
+    import tweepy
     for video in videos:
         channel_id, video_id, title, published_at, channel_title = video
         
-        import tweepy
-        import json
-        import os
-        from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN, TWITTER_MEDIA_ADDITIONAL_OWNERS
-
-        # Authenticate to Twitter using OAuth 2.0
-        client = tweepy.Client(
-            consumer_key=TWITTER_API_KEY,
-            consumer_secret=TWITTER_API_SECRET,
-            access_token=TWITTER_ACCESS_TOKEN,
-            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-            bearer_token=TWITTER_BEARER_TOKEN
-        )
-
         # Construct paths
         video_path = f'history/{video_id}/output_video_with_subs.mp4'
-        summary_path = f'history/{video_id}/gpt_log/summary.json'
-
-        # Check if video file exists
-        if not os.path.exists(video_path):
-            print(f"Video file not found for {video_id}")
+        
+        tweet_text = get_tweet_text(video_id)
+        if not tweet_text:
+            print(f"无法获取推文文本，跳过推文: {video_id}")
+            c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
+            conn.commit()
             continue
-        # Read summary from JSON file
-        try:
-            with open(summary_path, 'r', encoding='utf-8') as f:
-                summary_data = json.load(f)
-            if isinstance(summary_data, list) and len(summary_data) > 0:
-                tweet_text = summary_data[0]['response']['theme']
-                terms = summary_data[0]['response']['terms']
-            else:
-                tweet_text = summary_data['response']['theme']
-                terms = summary_data['response']['terms']
-            if not tweet_text:
-                raise KeyError("Theme not found in summary data")
-            
-            tweet_text += "\n\n"
-            # Add terms to tweet_text
-            for term in terms:
-                tweet_text += f"\n#{term['original']} ({term['translation']})：{term['explanation']}\n"
-        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-            print(f"Error reading summary for {video_id}: {str(e)}")
-            continue
-
+        
         # Post tweet with video
         try:
-            print(f"开始为视频 {video_id} 发送推文...")
-            auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
-            auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
-            api = tweepy.API(auth)
-            
-            print(f"正在上传视频: {video_path}")
-            media = api.media_upload(video_path, media_category="amplify_video")
-            print(f"视频上传成功，media_id: {media.media_id_string}")
-            
-            print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
-            tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string])
-            print(f"推文发送成功，tweet_id: {tweet.data['id']}")
-        
+            # post_twitters_x_api_client(video_id, tweet_text, video_path)
+            post_twitters_twitter_api_client(video_id, tweet_text, video_path)
             c.execute("UPDATE videos SET twitter = 1 WHERE video_id = ?", (video_id,))
             conn.commit()
             print(f"数据库更新成功，视频 {video_id} 标记为已发送推文")
             
             print(f"已成功为视频 {video_id} 发送推文")
-
         except tweepy.errors.TweepyException as e:
             print(f"发送推文时出错: {e}")
             c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
             conn.commit()
         
     conn.close()
+    
+def post_twitters_x_api_client(video_id, tweet_text, video_path):
+    import tweepy
+    from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, TWITTER_BEARER_TOKEN, TWITTER_MEDIA_ADDITIONAL_OWNERS
 
+    # Authenticate to Twitter using OAuth 2.0
+    client = tweepy.Client(
+        consumer_key=TWITTER_API_KEY,
+        consumer_secret=TWITTER_API_SECRET,
+        access_token=TWITTER_ACCESS_TOKEN,
+        access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
+        bearer_token=TWITTER_BEARER_TOKEN
+    )
+    
+    print(f"开始为视频 {video_id} 发送推文...")
+    auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+    auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
+    api = tweepy.API(auth)
+    
+    print(f"正在上传视频: {video_path}")
+    media = api.media_upload(video_path, media_category="amplify_video")
+    print(f"视频上传成功，media_id: {media.media_id_string}")
+    
+    print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
+    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string])
+    print(f"推文发送成功，tweet_id: {tweet.data['id']}")
+
+    
+def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
+    from twitter.account import Account
+    from config import TWITTER_COOKIES_CT0, TWITTER_COOKIES_AUTH_TOKEN
+    
+    print(f"开始为视频 {video_id} 发送推文...")
+    
+    print("正在初始化Twitter账户...")
+    account = Account(cookies = {
+        "ct0": TWITTER_COOKIES_CT0,
+        "auth_token": TWITTER_COOKIES_AUTH_TOKEN
+    })
+    print("Twitter账户初始化成功")
+
+    res = account.tweet(tweet_text, media=[
+        {
+            "media": video_path
+        }
+    ])
+    
+    if 'errors' in res:
+        print("推文发送失败，错误信息:")
+        for error in res['errors']:
+            print(f"错误代码: {error['code']}, 错误信息: {error['message']}")
+    else:
+        print(f"推文发送成功，tweet_id: {res['data']['rest_id']}")
+        
 def run_scheduler():
     # 初始化数据库
     init_db()
