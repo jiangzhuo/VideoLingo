@@ -18,3 +18,4 @@ json-repair
 google-api-python-client
 schedule
 tweepy
+twitter-api-client
