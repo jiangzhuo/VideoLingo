@@ -194,84 +194,90 @@ def process_videos():
                 print(f"无法找到视频文件: {video_id}")
                 continue
 
-            print(f"开始处理视频: {video_title}")
-            
-            step2_whisper.transcribe(video_file)
-            
-            step3_1_spacy_split.split_by_spacy()
-            step3_2_splitbymeaning.split_sentences_by_meaning()
-            
-            step4_1_summarize.get_summary()
-            from config import PAUSE_BEFORE_TRANSLATE
-            if PAUSE_BEFORE_TRANSLATE:
-                input("⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
-            step4_2_translate_all.translate_all()
-            
-            step5_splitforsub.split_for_sub_main()
-            step6_generate_final_timeline.align_timestamp_main()
-            
-            step7_merge_sub_to_vid.merge_subtitles_to_video(save_path)
-            
-            def cleanup_and_move_files(video_id, save_path):
-                print(f"开始清理和移动文件...")
+            try:
                 
-                # Create history directory for this video
-                history_dir = os.path.join('history', video_id)
-                os.makedirs(history_dir, exist_ok=True)
+                print(f"开始处理视频: {video_title}")
+                
+                step2_whisper.transcribe(video_file)
+                
+                step3_1_spacy_split.split_by_spacy()
+                step3_2_splitbymeaning.split_sentences_by_meaning()
+                
+                step4_1_summarize.get_summary()
+                from config import PAUSE_BEFORE_TRANSLATE
+                if PAUSE_BEFORE_TRANSLATE:
+                    input("⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
+                step4_2_translate_all.translate_all()
+                
+                step5_splitforsub.split_for_sub_main()
+                step6_generate_final_timeline.align_timestamp_main()
+                
+                step7_merge_sub_to_vid.merge_subtitles_to_video(save_path)
+                
+                def cleanup_and_move_files(video_id, save_path):
+                    print(f"开始清理和移动文件...")
+                    
+                    # Create history directory for this video
+                    history_dir = os.path.join('history', video_id)
+                    os.makedirs(history_dir, exist_ok=True)
 
-                # Move audio files
-                audio_output_dir = 'output/audio'
-                if os.path.exists(audio_output_dir):
-                    shutil.rmtree(os.path.join(history_dir, 'audio'), ignore_errors=True)
-                    shutil.move(audio_output_dir, history_dir)
-                else:
-                    print(f"Warning: Audio directory not found at {audio_output_dir}")
-                
-                # Move gpt_log files
-                gpt_log_output_dir = 'output/gpt_log'
-                if os.path.exists(gpt_log_output_dir):
-                    shutil.rmtree(os.path.join(history_dir, 'gpt_log'), ignore_errors=True)
-                    shutil.move(gpt_log_output_dir, history_dir)
-                else:
-                    print(f"Warning: GPT log directory not found at {gpt_log_output_dir}")
-                
-                # Move log files
-                log_output_dir = 'output/log'
-                if os.path.exists(log_output_dir):
-                    shutil.rmtree(os.path.join(history_dir, 'log'), ignore_errors=True)
-                    shutil.move(log_output_dir, history_dir)
-                else:
-                    print(f"Warning: Log directory not found at {log_output_dir}")
-                
-                # Move srt files
-                for srt_file in glob.glob('output/*.srt'):
-                    dest_file = os.path.join(history_dir, os.path.basename(srt_file))
-                    if os.path.exists(dest_file):
-                        os.remove(dest_file)
-                    shutil.move(srt_file, history_dir)
-                
-                # Move output video with subs
-                output_video = 'output/output_video_with_subs.mp4'
-                if os.path.exists(output_video):
-                    dest_file = os.path.join(history_dir, 'output_video_with_subs.mp4')
-                    if os.path.exists(dest_file):
-                        os.remove(dest_file)
-                    shutil.move(output_video, history_dir)
-                
-                # Delete the output folder for this video
-                shutil.rmtree(save_path, ignore_errors=True)
-                
-                print(f"清理和移动文件完成。所有相关文件已移至 {history_dir}")
+                    # Move audio files
+                    audio_output_dir = 'output/audio'
+                    if os.path.exists(audio_output_dir):
+                        shutil.rmtree(os.path.join(history_dir, 'audio'), ignore_errors=True)
+                        shutil.move(audio_output_dir, history_dir)
+                    else:
+                        print(f"Warning: Audio directory not found at {audio_output_dir}")
+                    
+                    # Move gpt_log files
+                    gpt_log_output_dir = 'output/gpt_log'
+                    if os.path.exists(gpt_log_output_dir):
+                        shutil.rmtree(os.path.join(history_dir, 'gpt_log'), ignore_errors=True)
+                        shutil.move(gpt_log_output_dir, history_dir)
+                    else:
+                        print(f"Warning: GPT log directory not found at {gpt_log_output_dir}")
+                    
+                    # Move log files
+                    log_output_dir = 'output/log'
+                    if os.path.exists(log_output_dir):
+                        shutil.rmtree(os.path.join(history_dir, 'log'), ignore_errors=True)
+                        shutil.move(log_output_dir, history_dir)
+                    else:
+                        print(f"Warning: Log directory not found at {log_output_dir}")
+                    
+                    # Move srt files
+                    for srt_file in glob.glob('output/*.srt'):
+                        dest_file = os.path.join(history_dir, os.path.basename(srt_file))
+                        if os.path.exists(dest_file):
+                            os.remove(dest_file)
+                        shutil.move(srt_file, history_dir)
+                    
+                    # Move output video with subs
+                    output_video = 'output/output_video_with_subs.mp4'
+                    if os.path.exists(output_video):
+                        dest_file = os.path.join(history_dir, 'output_video_with_subs.mp4')
+                        if os.path.exists(dest_file):
+                            os.remove(dest_file)
+                        shutil.move(output_video, history_dir)
+                    
+                    # Delete the output folder for this video
+                    shutil.rmtree(save_path, ignore_errors=True)
+                    
+                    print(f"清理和移动文件完成。所有相关文件已移至 {history_dir}")
 
-            # Call the cleanup function
-            cleanup_and_move_files(video_id, save_path)
-            # 更新处理状态
-            c.execute("UPDATE videos SET processed = 1 WHERE video_id = ?", (video_id,))
-            conn.commit()
+                # Call the cleanup function
+                cleanup_and_move_files(video_id, save_path)
+                # 更新处理状态
+                c.execute("UPDATE videos SET processed = 1 WHERE video_id = ?", (video_id,))
+                conn.commit()
             
-            print(f"视频处理完成: {video_title}")
+                print(f"视频处理完成: {video_title}")
+            except Exception as e:
+                print(f"处理视频 {video_id} 时发生错误: {str(e)}")
+                c.execute("UPDATE videos SET processed = 2 WHERE video_id = ?", (video_id,))
+                conn.commit()
     except Exception as e:
-        print(f"处理视频时发生错误: {str(e)}")
+        conn.commit()
     finally:
         conn.close()
 
