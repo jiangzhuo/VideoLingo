@@ -351,6 +351,8 @@ def post_twitters():
 
         except tweepy.errors.TweepyException as e:
             print(f"发送推文时出错: {e}")
+            c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
+            conn.commit()
         
     conn.close()
 
