@@ -1,3 +1,4 @@
+import asyncio
 import glob
 import json
 import os
@@ -327,7 +328,6 @@ def post_twitters():
         "SELECT channel_id, video_id, title, published_at, channel_title FROM videos WHERE downloaded = 1 AND processed = 1 AND twitter = 0")
     videos = c.fetchall()
 
-    import tweepy
     for video in videos:
         channel_id, video_id, title, published_at, channel_title = video
 
@@ -345,6 +345,7 @@ def post_twitters():
         try:
             # First attempt with post_twitters_twitter_api_client
             tweet_id = post_twitters_twitter_api_client(video_id, tweet_text, video_path)
+            # tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_text, video_path))
 
             if not tweet_id:
                 print(f"使用 Twitter API Client 发送失败，尝试使用 X API Client...")
@@ -383,7 +384,7 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
         consumer_secret=TWITTER_API_SECRET,
         access_token=TWITTER_ACCESS_TOKEN,
         access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-        bearer_token=TWITTER_BEARER_TOKEN
+        # bearer_token=TWITTER_BEARER_TOKEN
     )
 
     print(f"开始为视频 {video_id} 发送推文...")
@@ -435,6 +436,24 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         print(f"推文发送成功，tweet_id: {tweet_id}")
         return tweet_id
 
+async def post_twitters_twikit_client(video_id, tweet_text, video_path):
+    from twikit import Client
+
+    client = Client('en-US')
+    client.load_cookies('cookies.json')
+    print(f"开始为视频 {video_id} 发送推文...")
+    # media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True, wait_for_completion=True)
+    # print(media_id)
+    # # wait for 4 seconds
+    # print(f"等待4秒...")
+    # time.sleep(20)
+    print(tweet_text)
+    res = await client.create_tweet(tweet_text, media_ids=[1843393509103177728], is_note_tweet=True)
+
+    print(res)
+    tweet_id = res['result']['rest_id']
+    print(f"推文发送成功，tweet_id: {tweet_id}")
+    return tweet_id
 
 def run_scheduler():
     # 初始化数据库

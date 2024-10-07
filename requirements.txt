@@ -19,5 +19,5 @@ google-api-python-client
 schedule
 tweepy
 twitter-api-client
-
-ruamel.yaml==0.17.21
+twikit
+ruamel.yaml==0.17.28
