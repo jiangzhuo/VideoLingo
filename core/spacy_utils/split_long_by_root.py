@@ -1,11 +1,12 @@
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 import os,sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..', '..')))
 from core.spacy_utils.load_nlp_model import init_nlp
-from config import get_joiner, WHISPER_LANGUAGE
+from core.config_utils import load_key, get_joiner
 from core.step2_whisper import get_whisper_language
 from rich import print
+import string
 
 def split_long_sentence(doc):
     tokens = [token.text for token in doc]
@@ -30,7 +31,8 @@ def split_long_sentence(doc):
     # rebuild sentences based on optimal split points
     sentences = []
     i = n
-    language = get_whisper_language() if WHISPER_LANGUAGE == 'auto' else WHISPER_LANGUAGE # consider force english case
+    whisper_language = load_key("whisper.language")
+    language = get_whisper_language() if whisper_language == 'auto' else whisper_language # consider force english case
     joiner = get_joiner(language)
     while i > 0:
         j = prev[i]
@@ -48,7 +50,8 @@ def split_extremely_long_sentence(doc):
     part_length = n // num_parts
     
     sentences = []
-    language = get_whisper_language() if WHISPER_LANGUAGE == 'auto' else WHISPER_LANGUAGE # consider force english case
+    whisper_language = load_key("whisper.language")
+    language = get_whisper_language() if whisper_language == 'auto' else whisper_language # consider force english case
     joiner = get_joiner(language)
     for i in range(num_parts):
         start = i * part_length
@@ -57,6 +60,8 @@ def split_extremely_long_sentence(doc):
         sentences.append(sentence)
     
     return sentences
+
+
 
 def split_long_by_root_main(nlp):
 
@@ -75,9 +80,12 @@ def split_long_by_root_main(nlp):
         else:
             all_split_sentences.append(sentence.strip())
 
+    punctuation = string.punctuation + "'" + '"'  # include all punctuation and apostrophe ' and "
+
     with open("output/log/sentence_splitbynlp.txt", "w", encoding="utf-8") as output_file:
         for i, sentence in enumerate(all_split_sentences):
-            if not sentence.strip() or not sentence.strip(''.join([char for char in sentence if not char.isalnum()])):
+            stripped_sentence = sentence.strip()
+            if not stripped_sentence or all(char in punctuation for char in stripped_sentence):
                 print(f"[yellow]⚠️  Warning: Empty or punctuation-only line detected at index {i}[/yellow]")
                 if i > 0:
                     all_split_sentences[i-1] += sentence

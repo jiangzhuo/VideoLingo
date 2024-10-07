@@ -5,18 +5,19 @@ import torch
 from typing import Dict
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from core.config_utils import load_key
 
-from config import MODEL_DIR
+MODEL_DIR = load_key("model_dir")
+
 from core.all_whisper_methods.whisperXapi import (
     process_transcription, convert_video_to_audio, split_audio,
     save_results, save_language
 )
 from third_party.uvr5.uvr5_for_videolingo import uvr5_for_videolingo
-
+    
 def transcribe_audio(audio_file: str, start: float, end: float) -> Dict:
-    from config import WHISPER_LANGUAGE
+    WHISPER_LANGUAGE = load_key("whisper.language")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     rprint(f"[green]🚀 Starting WhisperX...[/green]")
     rprint(f"[cyan]Device:[/cyan] {device}")
@@ -24,8 +25,15 @@ def transcribe_audio(audio_file: str, start: float, end: float) -> Dict:
     # Adjust batch size based on GPU memory
     if device == "cuda":
         gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # convert to GB
-        batch_size = 4 if gpu_mem <= 8 else 16
-        compute_type = "float16"  # Change to "int8" if GPU memory is still insufficient (may reduce accuracy)
+        if gpu_mem <= 6:
+            batch_size = 2
+            compute_type = "float16"
+        elif gpu_mem <= 8:
+            batch_size = 4
+            compute_type = "float16"
+        else:
+            batch_size = 16
+            compute_type = "float16"
         rprint(f"[cyan]GPU memory:[/cyan] {gpu_mem:.2f} GB, [cyan]Batch size:[/cyan] {batch_size}")
     else:
         batch_size = 4
@@ -98,9 +106,8 @@ def transcribe(video_file: str):
         audio_file = convert_video_to_audio(video_file)
 
         # step1 UVR5 vocal separation
-        from config import UVR_BEFORE_TRANSCRIPTION
         output_dir = 'output/audio'
-        if UVR_BEFORE_TRANSCRIPTION:
+        if load_key("uvr_before_transcription"):
             if os.path.exists(os.path.join(output_dir, 'background.wav')):
                 rprint(f"[yellow]{os.path.join(output_dir, 'background.wav')} already exists, skip uvr5 processing.[/yellow]")
             else:

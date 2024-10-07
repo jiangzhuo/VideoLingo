@@ -3,11 +3,10 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from difflib import SequenceMatcher
 import re
-from config import get_joiner, WHISPER_LANGUAGE
+from core.config_utils import load_key, get_joiner
 from core.step2_whisper import get_whisper_language
 from rich.panel import Panel
 from rich.console import Console
-from rich.table import Table
 
 console = Console()
 
@@ -32,7 +31,8 @@ def remove_punctuation(text):
 def get_sentence_timestamps(df_words, df_sentences):
     time_stamp_list = []
     word_index = 0
-    language = get_whisper_language() if WHISPER_LANGUAGE == 'auto' else WHISPER_LANGUAGE
+    whisper_language = load_key("whisper.language")
+    language = get_whisper_language() if whisper_language == 'auto' else whisper_language
     joiner = get_joiner(language)
 
     for idx,sentence in df_sentences['Source'].items():
@@ -69,15 +69,8 @@ def get_sentence_timestamps(df_words, df_sentences):
             time_stamp_list.append((float(best_match['start']), float(best_match['end'])))
             word_index = start_index + best_match['word_count']  # update word_index to the start of the next sentence
         else:
-            console.print(Panel(f"[yellow]⚠️ Warning: No match found for the sentence: {sentence}[/yellow]"))
-            table = Table(title="Match Details")
-            table.add_column("Item", style="cyan")
-            table.add_column("Value", style="magenta")
-            table.add_row("🔍 Original sentence", repr(sentence))
-            table.add_row("🔗 Matched", best_match['phrase'])
-            table.add_row("📊 Similarity", f"{best_match['score']:.2f}")
-            console.print(table)
-            console.print("➖" * 25)
+            print(f"⚠️ Warning: No match found for sentence: {sentence}\nOriginal: {repr(sentence)}\nMatched: {best_match['phrase']}\nSimilarity: {best_match['score']:.2f}\n{'─' * 50}")
+            raise ValueError("❎ No match found for sentence. Please delete the 'output' directory and rerun the process, ensuring UVR is activated before transcription.")
         
         start_index = word_index  # update start_index for the next sentence
     
@@ -108,7 +101,7 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
 
     # Polish subtitles: replace punctuation in Translation if for_display
     if for_display:
-        df_trans_time['Translation'] = df_trans_time['Translation'].apply(lambda x: re.sub(r'[,，。]', ' ', x).strip())
+        df_trans_time['Translation'] = df_trans_time['Translation'].apply(lambda x: re.sub(r'[，。]', ' ', x).strip())
 
     # Output subtitles 📜
     def generate_subtitle_string(df, columns):

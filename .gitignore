@@ -151,9 +151,13 @@ dmypy.json
 cython_debug/
 
 # history and output
-output/
-history/
+/output/
+/history/
 _model_cache/
+
+batch/input/
+batch/output/
+batch/tasks_setting.xlsx
 
 # large files
 /ffmpeg.exe
@@ -161,10 +165,9 @@ _model_cache/
 /ffprobe.exe
 /ffprobe
 .DS_Store
-_config.py
-config.py
+AllinOne.ipynb
+config.backup.yaml
 
 # runtime
 runtime/
-venv/
 dev/

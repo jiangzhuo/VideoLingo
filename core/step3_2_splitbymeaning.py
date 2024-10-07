@@ -6,7 +6,7 @@ from core.prompts_storage import get_split_prompt
 from difflib import SequenceMatcher
 import math
 from core.spacy_utils.load_nlp_model import init_nlp
-from config import get_joiner, WHISPER_LANGUAGE
+from core.config_utils import load_key, get_joiner
 from core.step2_whisper import get_whisper_language
 from rich.console import Console
 from rich.table import Table
@@ -22,7 +22,8 @@ def find_split_positions(original, modified):
     split_positions = []
     parts = modified.split('[br]')
     start = 0
-    language = get_whisper_language() if WHISPER_LANGUAGE == 'auto' else WHISPER_LANGUAGE
+    whisper_language = load_key("whisper.language")
+    language = get_whisper_language() if whisper_language == 'auto' else whisper_language
     joiner = get_joiner(language)
 
     for i in range(len(parts) - 1):
@@ -53,13 +54,12 @@ def split_sentence(sentence, num_parts, word_limit=18, index=-1, retry_attempt=0
     """Split a long sentence using GPT and return the result as a string."""
     split_prompt = get_split_prompt(sentence, num_parts, word_limit)
     def valid_split(response_data):
-        # check if the best_way is in the response_data
-        if 'best_way' not in response_data:
-            return {"status": "error", "message": "Missing required key: best_way"}
+        if 'best' not in response_data:
+            return {"status": "error", "message": "Missing required key: `best`"}
         return {"status": "success", "message": "Split completed"}
     response_data = ask_gpt(split_prompt + ' ' * retry_attempt, response_json=True, valid_def=valid_split, log_title='sentence_splitbymeaning')
-    best_split_way = response_data[f"split_way_{response_data['best_way']}"]
-    split_points = find_split_positions(sentence, best_split_way)
+    best_split = response_data[f"split_{response_data['best']}"]
+    split_points = find_split_positions(sentence, best_split)
     # split the sentence based on the split points
     for i, split_point in enumerate(split_points):
         if i == 0:
@@ -115,9 +115,8 @@ def split_sentences_by_meaning():
 
     nlp = init_nlp()
     # 🔄 process sentences multiple times to ensure all are split
-    from config import MAX_WORKERS, MAX_SPLIT_LENGTH
     for retry_attempt in range(3):
-        sentences = parallel_split_sentences(sentences, max_length=MAX_SPLIT_LENGTH, max_workers=MAX_WORKERS, nlp=nlp, retry_attempt=retry_attempt)
+        sentences = parallel_split_sentences(sentences, max_length=load_key("max_split_length"), max_workers=load_key("max_workers"), nlp=nlp, retry_attempt=retry_attempt)
 
     # 💾 save results
     with open('output/log/sentence_splitbymeaning.txt', 'w', encoding='utf-8') as f:

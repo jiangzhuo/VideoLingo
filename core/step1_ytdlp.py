@@ -3,6 +3,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 from yt_dlp import YoutubeDL
 import re
+import subprocess
+from core.config_utils import load_key
 
 def sanitize_filename(filename):
     # Remove or replace illegal characters
@@ -12,7 +14,7 @@ def sanitize_filename(filename):
     # Use default name if filename is empty
     return filename if filename else 'video'
 
-def download_video_ytdlp(url, save_path='output', resolution='1080'):
+def download_video_ytdlp(url, save_path='output', resolution='1080', cutoff_time=None):
     allowed_resolutions = ['360', '1080', 'best']
     if resolution not in allowed_resolutions:
         resolution = '1080'
@@ -39,9 +41,36 @@ def download_video_ytdlp(url, save_path='output', resolution='1080'):
             if new_filename != filename:
                 os.rename(os.path.join(save_path, file), os.path.join(save_path, new_filename + ext))
 
+    # cut the video to make demo
+    if cutoff_time:
+        print(f"Cutoff time: {cutoff_time}, Now checking video duration...")
+        video_file = find_video_files(save_path)
+        
+        # Use librosa to get video duration
+        import librosa
+        duration = librosa.get_duration(filename=video_file)
+        
+        if duration > cutoff_time:
+            print(f"Video duration ({duration:.2f}s) is longer than cutoff time. Cutting the video...")
+            file_name, file_extension = os.path.splitext(video_file)
+            trimmed_file = f"{file_name}_trim{file_extension}"
+            ffmpeg_cmd = ['ffmpeg', '-i', video_file, '-t', str(cutoff_time), '-c', 'copy', trimmed_file]
+            print("🎬 Start cutting video...")
+            process = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, encoding='utf-8')
+            for line in process.stdout:
+                print(line, end='')
+            process.wait()
+            print(f"✅ Video has been cut to the first {cutoff_time} seconds")
+            
+            # Remove the original file and rename the trimmed file
+            os.remove(video_file)
+            os.rename(trimmed_file, video_file)
+            print(f"Original file removed and trimmed file renamed to {os.path.basename(video_file)}")
+        else:
+            print(f"Video duration ({duration:.2f}s) is not longer than cutoff time. No need to cut.")
+
 def find_video_files(save_path='output'):
-    from config import ALLOWED_VIDEO_FORMATS
-    video_files = [file for file in glob.glob(save_path + "/*") if os.path.splitext(file)[1][1:] in ALLOWED_VIDEO_FORMATS]
+    video_files = [file for file in glob.glob(save_path + "/*") if os.path.splitext(file)[1][1:] in load_key("allowed_video_formats")]
     # change \\ to /, this happen on windows
     if sys.platform.startswith('win'):
         video_files = [file.replace("\\", "/") for file in video_files]

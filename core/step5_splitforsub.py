@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.step3_2_splitbymeaning import split_sentence
 from core.ask_gpt import ask_gpt
 from core.prompts_storage import get_align_prompt
-from rich import print
+from core.config_utils import load_key
 from rich.panel import Panel
 from rich.console import Console
 from rich.table import Table
@@ -37,14 +37,14 @@ def align_subs(src_sub: str, tr_sub: str, src_part: str) -> Tuple[List[str], Lis
     align_prompt = get_align_prompt(src_sub, tr_sub, src_part)
     
     def valid_align(response_data):
-        # check if the best_way is in the response_data
-        if 'best_way' not in response_data:
-            return {"status": "error", "message": "Missing required key: best_way"}
+        # check if the best is in the response_data
+        if 'best' not in response_data:
+            return {"status": "error", "message": "Missing required key: `best`"}
         return {"status": "success", "message": "Align completed"}
     parsed = ask_gpt(align_prompt, response_json=True, valid_def=valid_align, log_title='align_subs')
 
-    best = int(parsed['best_way'])
-    align_data = parsed[f'align_way_{best}']
+    best = int(parsed['best'])
+    align_data = parsed[f'align_{best}']
     
     src_parts = src_part.split('\n')
     tr_parts = [item[f'target_part_{i+1}'].strip() for i, item in enumerate(align_data)]
@@ -59,7 +59,9 @@ def align_subs(src_sub: str, tr_sub: str, src_part: str) -> Tuple[List[str], Lis
     return src_parts, tr_parts
 
 def split_align_subs(src_lines: List[str], tr_lines: List[str], max_retry=5) -> Tuple[List[str], List[str]]:
-    from config import MAX_SUB_LENGTH, TARGET_SUB_MULTIPLIER, MAX_WORKERS
+    subtitle_set = load_key("subtitle")
+    MAX_SUB_LENGTH = subtitle_set["max_length"]
+    TARGET_SUB_MULTIPLIER = subtitle_set["target_multiplier"]
     for attempt in range(max_retry):
         console.print(Panel(f"🔄 Split attempt {attempt + 1}", expand=False))
         to_split = []
@@ -79,7 +81,7 @@ def split_align_subs(src_lines: List[str], tr_lines: List[str], max_retry=5) -> 
             split_src = split_sentence(src_lines[i], num_parts=2).strip()
             src_lines[i], tr_lines[i] = align_subs(src_lines[i], tr_lines[i], split_src)
         
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=load_key("max_workers")) as executor:
             executor.map(process, to_split)
         
         # Flatten `src_lines` and `tr_lines`
