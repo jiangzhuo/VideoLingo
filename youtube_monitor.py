@@ -311,7 +311,7 @@ def get_tweet_text(video_id):
 
         tweet_text += "\n\n"
         for term in terms:
-            tweet_text += f"\n#{term['original']} ({term['translation']})：{term['explanation']}\n"
+            tweet_text += f"\n#{term['original'].replace(' ', '')} ({term['translation']})：{term['explanation']}\n"
 
         return tweet_text
     except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
