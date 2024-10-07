@@ -7,7 +7,7 @@ from googleapiclient.discovery import build
 import schedule
 import time
 from datetime import datetime, timedelta
-from config import YOUTUBE_API_KEY, YOUTUBE_RAW_CHANNEL_IDS
+from config import YOUTUBE_API_KEY, YOUTUBE_RAW_CHANNEL_IDS, TWITTER_MEDIA_ADDITIONAL_OWNERS
 from st_components.imports_and_utils import *
 
 # YouTube API 密钥从config.py中获取
@@ -392,11 +392,14 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
     api = tweepy.API(auth)
 
     print(f"正在上传视频: {video_path}")
-    media = api.media_upload(video_path, media_category="amplify_video", additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+    media = api.media_upload(video_path, media_category="amplify_video", chunked=True, additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
     print(f"视频上传成功，media_id: {media.media_id_string}")
 
+    # wait for 4 seconds
+    time.sleep(4)
+
     print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
-    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string])
+    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string], media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
     print(f"推文发送成功，tweet_id: {tweet.data['id']}")
     return tweet.data['id']
 
@@ -411,12 +414,15 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
     account = Account(cookies={
         "ct0": TWITTER_COOKIES_CT0,
         "auth_token": TWITTER_COOKIES_AUTH_TOKEN
-    })
+    },
+    debug=True)
     print("Twitter账户初始化成功")
 
     res = account.tweet(tweet_text, media=[
         {
-            "media": video_path
+            "media": video_path,
+            "media_category": "amplify_video",
+            "tagged_users": TWITTER_MEDIA_ADDITIONAL_OWNERS
         }
     ])
 
