@@ -207,7 +207,7 @@ def process_videos():
 
                 print(f"开始处理视频: {video_title}")
 
-                step2_whisper.transcribe(video_file)
+                step2_whisper.transcribe(save_path)
 
                 step3_1_spacy_split.split_by_spacy()
                 step3_2_splitbymeaning.split_sentences_by_meaning()
@@ -392,7 +392,7 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
     api = tweepy.API(auth)
 
     print(f"正在上传视频: {video_path}")
-    media = api.media_upload(video_path, media_category="amplify_video")
+    media = api.media_upload(video_path, media_category="amplify_video", additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
     print(f"视频上传成功，media_id: {media.media_id_string}")
 
     print(f"正在发送推文，文本内容: {tweet_text[:50]}...")

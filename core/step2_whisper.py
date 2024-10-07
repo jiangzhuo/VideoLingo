@@ -13,9 +13,9 @@ def get_whisper_language():
         print("Unable to read language information")
         return None
 
-def transcribe():
+def transcribe(save_path='output'):
     WHISPER_METHOD = load_key("whisper.method")
-    video_file = find_video_files()
+    video_file = find_video_files(save_path)
     if WHISPER_METHOD == 'whisperx':
         from core.all_whisper_methods.whisperX import transcribe as ts
     elif WHISPER_METHOD == 'whisperxapi':
