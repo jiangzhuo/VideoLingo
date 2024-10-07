@@ -25,15 +25,9 @@ def valid_translate_result(result: dict, required_keys: list, required_sub_keys:
         return re.sub(r'[^\w\s]', '', text).strip()
     for key in result:
         for sub_key in required_sub_keys:
-            original_text = result[key]['Original Subtitle']
-            translated_text = result[key][sub_key]
-            if remove_punctuation(original_text).strip():
-                translate_result = remove_punctuation(translated_text).strip()
-                if not translate_result:
-                    # Replace translated text with invisible character
-                    result[key][sub_key] = '\u200B'  # Zero-width space
-                    # return {"status": "error", "message": f"Empty value for sub-key '{sub_key}' in item {key}"}
-                    return {"status": "success", "message": "Translation completed"}
+            translate_result = remove_punctuation(result[key][sub_key]).strip()
+            if not translate_result:
+                return {"status": "error", "message": f"Empty value for sub-key '{sub_key}' in item {key}"}
     
     return {"status": "success", "message": "Translation completed"}
 
