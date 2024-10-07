@@ -1,6 +1,8 @@
 import os,sys,json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.step2_whisper import get_whisper_language
+from core.config_utils import load_key
+
 ## ================================================================
 # @ step4_splitbymeaning.py
 def get_split_prompt(sentence, num_parts = 2, word_limit = 20):
@@ -28,10 +30,10 @@ Your task is to split the given subtitle text into **{num_parts}** parts, each s
 Please provide your answer in the following JSON format, <<>> represents placeholders:
 {{
     "analysis": "Brief analysis of the text structure and split strategy",
-    "split_way_1": "<<The first split method, output complete sentences, insert [br] as a delimiter at the split position. e.g. this is the first part [br] this is the second part.>>",
-    "split_way_2": "<<The second split method>>",
-    "evaluation": "<<Unified brief evaluation of the 2 split methods, written in one sentence, no line breaks>>",
-    "best_way": "<<The best split method number, 1 or 2>>"
+    "split_1": "<<The first split method, output complete sentences, insert [br] as a delimiter at the split position. e.g. this is the first part [br] this is the second part.>>",
+    "split_2": "<<The second split method>>",
+    "eval": "<<Unified brief evaluation of the 2 split methods, written in one sentence, no line breaks>>",
+    "best": "<<The best split method number, 1 or 2>>"
 }}
 
 ### Given Text
@@ -46,7 +48,7 @@ Please provide your answer in the following JSON format, <<>> represents placeho
 # @ step4_1_summarize.py
 def get_summary_prompt(source_content):
     src_language = get_whisper_language()
-    from config import TARGET_LANGUAGE
+    TARGET_LANGUAGE = load_key("target_language")
     summary_prompt = f"""
 ### Role
 You are a professional video translation expert and terminology consultant. Your expertise lies not only in accurately understanding the original {src_language} text but also in extracting key professional terms and optimizing the translation to better suit the expression habits and cultural background of {TARGET_LANGUAGE}.
@@ -138,7 +140,7 @@ def generate_shared_prompt(previous_content_prompt, after_content_prompt, summar
 {things_to_note_prompt}'''
 
 def get_prompt_faithfulness(lines, shared_prompt):
-    from config import TARGET_LANGUAGE
+    TARGET_LANGUAGE = load_key("target_language")
     # Split lines by \n
     line_splits = lines.split('\n')
     
@@ -146,8 +148,8 @@ def get_prompt_faithfulness(lines, shared_prompt):
     json_format = {}
     for i, line in enumerate(line_splits, 1):
         json_format[i] = {
-            "Original Subtitle": line,
-            "Direct Translation": f"<<direct {TARGET_LANGUAGE} translation>>"
+            "origin": line,
+            "direct": f"<<direct {TARGET_LANGUAGE} translation>>"
         }
     
     src_language = get_whisper_language()
@@ -184,14 +186,14 @@ Please complete the following JSON data, where << >> represents placeholders tha
 
 
 def get_prompt_expressiveness(faithfulness_result, lines, shared_prompt):
-    from config import TARGET_LANGUAGE
+    TARGET_LANGUAGE = load_key("target_language")
     json_format = {}
     for key, value in faithfulness_result.items():
         json_format[key] = {
-            "Original Subtitle": value['Original Subtitle'],
-            "Direct Translation": value['Direct Translation'],
-            "Translation Reflection": "<<reflection on the direct translation version>>",
-            "Free Translation": f"<<retranslated result, aiming for fluency and naturalness, conforming to {TARGET_LANGUAGE} expression habits>>"
+            "origin": value['origin'],
+            "direct": value['direct'],
+            "reflection": "<<reflection on the direct translation version>>",
+            "free": f"<<retranslated result, aiming for fluency and naturalness, conforming to {TARGET_LANGUAGE} expression habits>>"
         }
 
     src_language = get_whisper_language()
@@ -241,7 +243,7 @@ Please complete the following JSON data, where << >> represents placeholders tha
 ## ================================================================
 # @ step6_splitforsub.py
 def get_align_prompt(src_sub, tr_sub, src_part):
-    from config import TARGET_LANGUAGE
+    TARGET_LANGUAGE = load_key("target_language")
     src_language = get_whisper_language()
     src_splits = src_part.split('\n')
     num_parts = len(src_splits)
@@ -278,14 +280,14 @@ Please follow these steps and provide the results for each step in the JSON outp
 Please complete the following JSON data, where << >> represents placeholders, and return your results in JSON format:
 {{
     "analysis": "<<Detailed analysis of word order, structure, and semantic correspondence between {src_language} and {target_language} subtitles>>",
-    "align_way_1": [
+    "align_1": [
         {align_parts_json}
     ],
-    "align_way_2": [
+    "align_2": [
         {align_parts_json}
     ],
     "comparison": "<<Brief evaluation and comparison of the 2 alignment schemes>>",
-    "best_way": "<<Number of the best alignment scheme, 1 or 2>>"
+    "best": "<<Number of the best alignment scheme, 1 or 2>>"
 }}
 '''
 

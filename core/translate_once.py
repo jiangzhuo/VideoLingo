@@ -5,6 +5,7 @@ from core.prompts_storage import generate_shared_prompt, get_prompt_faithfulness
 from rich.panel import Panel
 from rich.console import Console
 from rich.table import Table
+from rich import box
 import re
 
 console = Console()
@@ -42,9 +43,9 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
     # Retry translation if the length of the original text and the translated text are not the same, or if the specified key is missing
     def retry_translation(prompt, step_name):
         def valid_faith(response_data):
-            return valid_translate_result(response_data, ['1'], ['Direct Translation'])
+            return valid_translate_result(response_data, ['1'], ['direct'])
         def valid_express(response_data):
-            return valid_translate_result(response_data, ['1'], ['Free Translation'])
+            return valid_translate_result(response_data, ['1'], ['free'])
         for retry in range(3):
             if step_name == 'faithfulness':
                 result = ask_gpt(prompt, response_json=True, valid_def=valid_faith, log_title=f'translate_{step_name}')
@@ -61,28 +62,28 @@ def translate_lines(lines, previous_content_prompt, after_cotent_prompt, things_
     faith_result = retry_translation(prompt1, 'faithfulness')
 
     for i in faith_result:
-        faith_result[i]["Direct Translation"] = faith_result[i]["Direct Translation"].replace('\n', ' ')
+        faith_result[i]["direct"] = faith_result[i]["direct"].replace('\n', ' ')
 
     ## Step 2: Express Smoothly  
     prompt2 = get_prompt_expressiveness(faith_result, lines, shared_prompt)
     express_result = retry_translation(prompt2, 'expressiveness')
 
-    table = Table(title="Translation Results")
-    table.add_column("Translations", style="cyan")
+    table = Table(title="Translation Results", show_header=False, box=box.ROUNDED)
+    table.add_column("Translations", style="bold")
     for i, key in enumerate(express_result):
-        table.add_row(f"[cyan]Original: {faith_result[key]['Original Subtitle']}[/cyan]")
-        table.add_row(f"[magenta]Direct:   {faith_result[key]['Direct Translation']}[/magenta]")
-        table.add_row(f"[green]Free:     {express_result[key]['Free Translation']}[/green]")
+        table.add_row(f"[bold blue]Origin:    [/bold blue][light_blue]{faith_result[key]['origin']}[/light_blue]")
+        table.add_row(f"[dim italic]Direct:    [/dim italic][dim]{faith_result[key]['direct']}[/dim]")
+        table.add_row(f"[bold green]Free:      [/bold green]{express_result[key]['free']}")
         if i < len(express_result) - 1:
             table.add_row("[yellow]" + "-" * 50 + "[/yellow]")
 
     console.print(table)
 
-    translate_result = "\n".join([express_result[i]["Free Translation"].replace('\n', ' ').strip() for i in express_result])
+    translate_result = "\n".join([express_result[i]["free"].replace('\n', ' ').strip() for i in express_result])
 
     if len(lines.split('\n')) != len(translate_result.split('\n')):
         console.print(Panel(f'[red]❌ Translation of block {index} failed, Length Mismatch, Please check `output/gpt_log/translate_expressiveness.json`[/red]'))
-        raise ValueError(f'Original ···{lines}···,\nbut got ···{translate_result}···')
+        raise ValueError(f'Origin ···{lines}···,\nbut got ···{translate_result}···')
 
     return translate_result, lines
 

@@ -1,14 +1,15 @@
 import streamlit as st
 import os, sys
 from st_components.imports_and_utils import *
+from core.config_utils import load_key
 
-# 添加以下代码来设置代理
-from config import USE_HTTP_PROXY, HTTP_PROXY
+# SET PROXY
+proxy_set = load_key("http_proxy")
+if proxy_set["use"]:
+    os.environ['HTTP_PROXY'] = proxy_set["address"]
+    os.environ['HTTPS_PROXY'] = proxy_set["address"]
 
-if USE_HTTP_PROXY:
-    os.environ['HTTP_PROXY'] = HTTP_PROXY
-    os.environ['HTTPS_PROXY'] = HTTP_PROXY
-
+# SET PATH
 current_dir = os.path.dirname(os.path.abspath(__file__))
 os.environ['PATH'] += os.pathsep + current_dir
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -35,13 +36,8 @@ def text_processing_section():
                 process_text()
                 st.rerun()
         else:
-            #! ffmpeg has problems merging subtitles on linux
-            if sys.platform.startswith('linux'):
-                st.warning(gls("linux_warning"))
-            else:
-                st.success(gls("subtitle_translation_complete"))
-            from config import RESOLUTION
-            if RESOLUTION != "0x0":
+            st.success(gls("subtitle_translation_complete"))
+            if load_key("resolution") != "0x0":
                 st.video("output/output_video_with_subs.mp4")
             download_subtitle_zip_button(text=gls("download_all_subtitles"))
             
@@ -51,17 +47,14 @@ def text_processing_section():
             return True
 
 def process_text():
-    video_file = step1_ytdlp.find_video_files()
-    
     with st.spinner(gls("using_whisper_transcription")):
-        step2_whisper.transcribe(video_file)
+        step2_whisper.transcribe()
     with st.spinner(gls("splitting_long_sentences")):  
         step3_1_spacy_split.split_by_spacy()
         step3_2_splitbymeaning.split_sentences_by_meaning()
     with st.spinner(gls("summarizing_and_translating")):
         step4_1_summarize.get_summary()
-        from config import PAUSE_BEFORE_TRANSLATE
-        if PAUSE_BEFORE_TRANSLATE:
+        if load_key("pause_before_translate"):
             input("⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
         step4_2_translate_all.translate_all()
     with st.spinner(gls("processing_aligning_subtitles")): 
@@ -91,8 +84,7 @@ def audio_processing_section():
                 st.rerun()
         else:
             st.success(gls("audio_processing_complete"))
-            from config import RESOLUTION
-            if RESOLUTION != "0x0": 
+            if load_key("resolution") != "0x0": 
                 st.video("output/output_video_with_audio.mp4") 
             if st.button(gls("delete_dubbing_files"), key="delete_dubbing_files"):
                 delete_dubbing_files()
