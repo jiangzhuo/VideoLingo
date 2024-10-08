@@ -93,7 +93,7 @@ def get_latest_videos():
                 duration = video.get('duration', 0)  # Get duration, default to 0 if not available
 
                 # Ignore videos longer than 10 minutes (900 seconds)
-                if duration > 600:
+                if duration > 900:
                     print(f"忽略长视频: {video['title']} (时长: {duration} 秒)")
                     continue
                 if duration < 0:
@@ -293,7 +293,7 @@ def process_videos():
         conn.close()
 
 
-def get_tweet_text(video_id):
+def get_tweet_text(video_id, limit_to_280=False):
     summary_path = f'history/{video_id}/gpt_log/summary.json'
 
     try:
@@ -310,11 +310,29 @@ def get_tweet_text(video_id):
         if not tweet_text:
             raise KeyError("Theme not found in summary data")
 
-        tweet_text += "\n\n"
-        for term in terms:
-            tweet_text += f"\n#{term['original'].replace(' ', '')} ({term['translation']})：{term['explanation']}\n"
+        if limit_to_280:
 
-        return tweet_text
+            full_tweet = ""
+            if len(tweet_text) > 140:
+                limited_tweet = tweet_text[:137] + "..."
+                full_tweet = tweet_text[137:]
+            else:
+                limited_tweet = tweet_text + "\n\n"
+
+            for term in terms:
+                term_text = f"\n#{term['original'].replace(' ', '')} ({term['translation']})：{term['explanation']}\n"
+                if len(limited_tweet) + len(term_text) <= 140:
+                    limited_tweet += term_text
+                else:
+                    full_tweet += term_text
+
+            return [limited_tweet, full_tweet]
+        else:
+            tweet_text += "\n\n"
+            for term in terms:
+                tweet_text += f"\n#{term['original'].replace(' ', '')} ({term['translation']})：{term['explanation']}\n"
+            return [tweet_text]
+
     except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
         print(f"Error reading summary for {video_id}: {str(e)}")
         return None
@@ -325,17 +343,18 @@ def post_twitters():
     c = conn.cursor()
 
     c.execute(
-        "SELECT channel_id, video_id, title, published_at, channel_title FROM videos WHERE downloaded = 1 AND processed = 1 AND twitter = 0")
+        "SELECT channel_id, video_id, title, published_at, channel_title, duration FROM videos WHERE downloaded = 1 AND processed = 1 AND twitter = 0")
     videos = c.fetchall()
 
     for video in videos:
-        channel_id, video_id, title, published_at, channel_title = video
+        channel_id, video_id, title, published_at, channel_title, duration = video
 
         # Construct paths
         video_path = f'history/{video_id}/output_video_with_subs.mp4'
 
-        tweet_text = get_tweet_text(video_id)
-        if not tweet_text:
+        tweet_textes = get_tweet_text(video_id, duration >= 600)
+        print(tweet_textes)
+        if len(tweet_textes) == 0:
             print(f"无法获取推文文本，跳过推文: {video_id}")
             c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
             conn.commit()
@@ -344,19 +363,21 @@ def post_twitters():
         # Post tweet with video
         try:
             # First attempt with post_twitters_twitter_api_client
-            tweet_id = post_twitters_twitter_api_client(video_id, tweet_text, video_path)
-            # tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_text, video_path))
+            if duration >= 600:
+                tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes[0], video_path))
+            else:
+                tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
 
             if not tweet_id:
-                print(f"使用 Twitter API Client 发送失败，尝试使用 X API Client...")
+                print(f"使用 X API Client 发送失败，尝试使用 Twitter API Client...")
                 # Second attempt with post_twitters_x_api_client
-                tweet_id = post_twitters_x_api_client(video_id, tweet_text, video_path)
+                tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes[0], video_path)
 
                 if not tweet_id:
-                    print(f"使用 X API Client 也失败，等待60秒后重试 Twitter API Client...")
+                    print(f"使用 Twitter API Client 也失败，等待60秒后重试 Twitter API Client...")
                     time.sleep(60)
                     # Third attempt with post_twitters_twitter_api_client after waiting
-                    tweet_id = post_twitters_twitter_api_client(video_id, tweet_text, video_path)
+                    tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
 
             if not tweet_id:
                 print(f"所有尝试都失败，将视频 {video_id} 标记为发送失败")
@@ -393,14 +414,16 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
     api = tweepy.API(auth)
 
     print(f"正在上传视频: {video_path}")
-    media = api.media_upload(video_path, media_category="amplify_video", chunked=True, additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+    media = api.media_upload(video_path, media_category="amplify_video", chunked=True,
+                             additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
     print(f"视频上传成功，media_id: {media.media_id_string}")
 
     # wait for 4 seconds
     time.sleep(4)
 
     print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
-    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string], media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
+                                media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
     print(f"推文发送成功，tweet_id: {tweet.data['id']}")
     return tweet.data['id']
 
@@ -416,7 +439,7 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         "ct0": TWITTER_COOKIES_CT0,
         "auth_token": TWITTER_COOKIES_AUTH_TOKEN
     },
-    debug=True)
+        debug=True)
     print("Twitter账户初始化成功")
 
     res = account.tweet(tweet_text, media=[
@@ -436,24 +459,28 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         print(f"推文发送成功，tweet_id: {tweet_id}")
         return tweet_id
 
+
 async def post_twitters_twikit_client(video_id, tweet_text, video_path):
     from twikit import Client
 
+    print(f"开始为视频 {video_id} 发送推文...")
+    print("正在初始化 Twikit 客户端...")
     client = Client('en-US')
     client.load_cookies('cookies.json')
-    print(f"开始为视频 {video_id} 发送推文...")
-    # media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True, wait_for_completion=True)
-    # print(media_id)
-    # # wait for 4 seconds
-    # print(f"等待4秒...")
-    # time.sleep(20)
-    print(tweet_text)
-    res = await client.create_tweet(tweet_text, media_ids=[1843393509103177728], is_note_tweet=True)
+    print("Twikit 客户端初始化成功")
 
-    print(res)
-    tweet_id = res['result']['rest_id']
+    print(f"正在上传视频: {video_path}")
+    media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True,
+                                         wait_for_completion=True)
+    print(f"视频上传成功，media_id: {media_id}")
+
+    print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
+    tweet = await client.create_tweet(tweet_text, media_ids=[media_id], is_note_tweet=True)
+
+    tweet_id = tweet.id
     print(f"推文发送成功，tweet_id: {tweet_id}")
     return tweet_id
+
 
 def run_scheduler():
     # 初始化数据库
