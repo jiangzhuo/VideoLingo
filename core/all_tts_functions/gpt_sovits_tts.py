@@ -60,7 +60,7 @@ def gpt_sovits_tts_for_videolingo(text, save_as, number, task_df):
     start_gpt_sovits_server()
     TARGET_LANGUAGE = load_key("target_language")
     WHISPER_LANGUAGE = load_key("whisper.language")
-    sovits_set = load_key("sovits")
+    sovits_set = load_key("gpt_sovits")
     DUBBING_CHARACTER = sovits_set["character"]
     REFER_MODE = sovits_set["refer_mode"]
 
@@ -132,7 +132,7 @@ def start_gpt_sovits_server():
     sock.close()
 
     # Find and check config path
-    gpt_sovits_dir, config_path = find_and_check_config_path(load_key("sovits.character"))
+    gpt_sovits_dir, config_path = find_and_check_config_path(load_key("gpt_sovits.character"))
 
     # Change to the GPT-SoVITS-v2 directory
     os.chdir(gpt_sovits_dir)
