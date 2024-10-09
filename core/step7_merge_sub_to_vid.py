@@ -66,6 +66,9 @@ def merge_subtitles_to_video(output_path='output'):
             f"PrimaryColour={TRANS_FONT_COLOR},OutlineColour={TRANS_OUTLINE_COLOR},OutlineWidth={TRANS_OUTLINE_WIDTH},"
             f"BackColour={TRANS_BACK_COLOR},Alignment=2,MarginV=25,BorderStyle=4'"
         ).encode('utf-8'),  # 使用 UTF-8 编码
+        '-c:v', 'h264_nvenc',  # 使用NVIDIA GPU进行H.264编码
+        '-preset', 'slow',  # 使用较慢的预设以获得更好的质量
+        '-crf', '23',  # 设置恒定速率因子，平衡质量和文件大小
         '-y',
         output_video
     ]
