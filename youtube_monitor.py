@@ -500,6 +500,7 @@ async def post_twitters_twikit_client(video_id, tweet_textes, video_path):
         tweet_id = tweet.id
         print(f"[Twikit Client] [{video_id}] 推文发送成功，tweet_id: {tweet_id}")
         # Check if there's a second tweet text
+        time.sleep(5)
         if len(tweet_textes) > 1:
             reply_text = tweet_textes[1]
             print(f"[Twikit Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
