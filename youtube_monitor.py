@@ -77,7 +77,8 @@ def get_latest_videos():
                 print(f"[GET_LATEST] [{video_id}] 忽略长视频: {video['title']} (时长: {duration} 秒)")
                 continue
             if duration < 0:
-                print(f"[GET_LATEST] [{video_id}] 忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
+                print(
+                    f"[GET_LATEST] [{video_id}] 忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
                 continue
 
             c.execute("SELECT * FROM videos WHERE channel_id=? AND video_id=?", (channel_id, video_id))
@@ -180,7 +181,8 @@ def process_videos():
                 step4_1_summarize.get_summary()
                 from config import PAUSE_BEFORE_TRANSLATE
                 if PAUSE_BEFORE_TRANSLATE:
-                    input(f"[PROCESS] [{video_id}] ⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
+                    input(
+                        f"[PROCESS] [{video_id}] ⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
                 step4_2_translate_all.translate_all()
                 print(f"[PROCESS] [{video_id}] 翻译完成")
 
@@ -348,6 +350,7 @@ def send_single_tweet(c, conn, video, source="regular"):
         c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
         conn.commit()
 
+
 def post_twitters():
     conn = sqlite3.connect('youtube_videos.db')
     c = conn.cursor()
@@ -360,7 +363,8 @@ def post_twitters():
         send_single_tweet(c, conn, video, source="post_twitters")
 
     conn.close()
-    
+
+
 def retry_failed_tweets():
     conn = sqlite3.connect('youtube_videos.db')
     c = conn.cursor()
@@ -408,7 +412,7 @@ def post_twitters_x_api_client(video_id, tweet_textes, video_path):
         tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
                                     media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
         print(f"[X API Client] [{video_id}] 推文发送成功，tweet_id: {tweet.data['id']}")
-        
+
         # Check if there's a second tweet text
         if len(tweet_textes) > 1:
             reply_text = tweet_textes[1]
@@ -419,6 +423,7 @@ def post_twitters_x_api_client(video_id, tweet_textes, video_path):
     except Exception as e:
         print(f"[X API Client] [{video_id}] 错误: {e}")
         return None
+
 
 def post_twitters_twitter_api_client(video_id, tweet_textes, video_path):
     tweet_text = tweet_textes[0]
@@ -456,11 +461,12 @@ def post_twitters_twitter_api_client(video_id, tweet_textes, video_path):
                 reply_text = tweet_textes[1]
                 print(f"[Twitter API Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
                 try:
-                    reply = account.tweet(reply_text, in_reply_to_tweet_id=tweet_id)
+                    reply = account.reply(text=reply_text, tweet_id=tweet_id)
                     if 'errors' in reply:
                         print(f"[Twitter API Client] [{video_id}] 回复推文发送失败，错误信息:")
                         for error in reply['errors']:
-                            print(f"[Twitter API Client] [{video_id}] 错误代码: {error['code']}, 错误信息: {error['message']}")
+                            print(
+                                f"[Twitter API Client] [{video_id}] 错误代码: {error['code']}, 错误信息: {error['message']}")
                     else:
                         reply_id = reply['data']['notetweet_create']['tweet_results']['result']['rest_id']
                         print(f"[Twitter API Client] [{video_id}] 回复推文发送成功，reply_id: {reply_id}")
@@ -470,6 +476,7 @@ def post_twitters_twitter_api_client(video_id, tweet_textes, video_path):
     except Exception as e:
         print(f"[Twitter API Client] [{video_id}] 错误: {e}")
         return None
+
 
 async def post_twitters_twikit_client(video_id, tweet_textes, video_path):
     tweet_text = tweet_textes[0]
@@ -496,12 +503,13 @@ async def post_twitters_twikit_client(video_id, tweet_textes, video_path):
         if len(tweet_textes) > 1:
             reply_text = tweet_textes[1]
             print(f"[Twikit Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
-            reply = await client.create_tweet(reply_text, in_reply_to_tweet_id=tweet.id)
+            reply = await client.create_tweet(reply_text, reply_to=tweet.id, is_note_tweet=True)
             print(f"[Twikit Client] [{video_id}] 回复推文发送成功，reply_id: {reply.id}")
         return tweet_id
     except Exception as e:
         print(f"[Twikit Client] [{video_id}] 错误: {e}")
         return None
+
 
 def run_scheduler():
     # 初始化数据库
