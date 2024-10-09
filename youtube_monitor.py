@@ -321,6 +321,48 @@ def get_tweet_text(video_id, limit_to_280=False):
         return None
 
 
+def send_single_tweet(c, conn, video):
+    channel_id, video_id, title, published_at, channel_title, duration = video
+    video_path = f'history/{video_id}/output_video_with_subs.mp4'
+
+    tweet_textes = get_tweet_text(video_id, duration >= 600)
+    print(tweet_textes)
+    if len(tweet_textes) == 0:
+        print(f"无法获取推文文本，跳过推文: {video_id}")
+        c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
+        conn.commit()
+        return
+
+    try:
+        if duration >= 600:
+            tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes[0], video_path))
+        else:
+            tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
+
+        if not tweet_id:
+            print(f"使用 X API Client 发送失败，尝试使用 Twitter API Client...")
+            tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes[0], video_path)
+
+            if not tweet_id:
+                print(f"使用 Twitter API Client 也失败，等待60秒后重试 Twitter API Client...")
+                time.sleep(60)
+                tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
+
+        if not tweet_id:
+            print(f"所有尝试都失败，将视频 {video_id} 标记为发送失败")
+            c.execute("SELECT twitter FROM videos WHERE video_id = ?", (video_id,))
+            current_value = c.fetchone()[0]
+            new_value = 3 if current_value < 3 else current_value + 1
+            c.execute("UPDATE videos SET twitter = ? WHERE video_id = ?", (new_value, video_id))
+        else:
+            c.execute("UPDATE videos SET twitter = ? WHERE video_id = ?", (tweet_id, video_id,))
+            conn.commit()
+            print(f"数据库更新成功，视频 {video_id} 标记为已发送推文")
+    except Exception as e:
+        print(f"发送推文时出错: {e}")
+        c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
+        conn.commit()
+
 def post_twitters():
     conn = sqlite3.connect('youtube_videos.db')
     c = conn.cursor()
@@ -330,49 +372,23 @@ def post_twitters():
     videos = c.fetchall()
 
     for video in videos:
-        channel_id, video_id, title, published_at, channel_title, duration = video
+        send_single_tweet(c, conn, video)
 
-        # Construct paths
-        video_path = f'history/{video_id}/output_video_with_subs.mp4'
+    conn.close()
+    
+def retry_failed_tweets():
+    conn = sqlite3.connect('youtube_videos.db')
+    c = conn.cursor()
 
-        tweet_textes = get_tweet_text(video_id, duration >= 600)
-        print(tweet_textes)
-        if len(tweet_textes) == 0:
-            print(f"无法获取推文文本，跳过推文: {video_id}")
-            c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
-            conn.commit()
-            continue
+    c.execute(
+        "SELECT channel_id, video_id, title, published_at, channel_title, duration FROM videos WHERE downloaded = 1 AND processed = 1 AND twitter >= 3 AND twitter <= 10 ORDER BY published_at ASC LIMIT 10"
+    )
+    failed_tweets = c.fetchall()
 
-        # Post tweet with video
-        try:
-            # First attempt with post_twitters_twitter_api_client
-            if duration >= 600:
-                tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes[0], video_path))
-            else:
-                tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
-
-            if not tweet_id:
-                print(f"使用 X API Client 发送失败，尝试使用 Twitter API Client...")
-                # Second attempt with post_twitters_x_api_client
-                tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes[0], video_path)
-
-                if not tweet_id:
-                    print(f"使用 Twitter API Client 也失败，等待60秒后重试 Twitter API Client...")
-                    time.sleep(60)
-                    # Third attempt with post_twitters_twitter_api_client after waiting
-                    tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
-
-            if not tweet_id:
-                print(f"所有尝试都失败，将视频 {video_id} 标记为发送失败")
-                c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))
-            else:
-                c.execute("UPDATE videos SET twitter = ? WHERE video_id = ?", (tweet_id, video_id,))
-                conn.commit()
-                print(f"数据库更新成功，视频 {video_id} 标记为已发送推文")
-        except Exception as e:
-            print(f"发送推文时出错: {e}")
-            c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
-            conn.commit()
+    for video in failed_tweets:
+        print(f"重试发送推文: {video[1]}")
+        send_single_tweet(c, conn, video)
+        time.sleep(5)
 
     conn.close()
 
@@ -494,6 +510,7 @@ def run_scheduler():
         post_twitters()
 
     schedule.every(5).minutes.do(check_and_process)
+    schedule.every(3).minutes.do(retry_failed_tweets)
 
     while True:
         schedule.run_pending()
