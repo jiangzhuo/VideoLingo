@@ -42,29 +42,24 @@ def get_latest_videos():
     conn = sqlite3.connect('youtube_videos.db')
     c = conn.cursor()
 
-    # Get the current date and time
     now = datetime.now()
-
-    # Determine which channel_id to use based on the day of the week and week of the month
-    day_of_week = now.weekday()  # Monday is 0, Sunday is 6
+    day_of_week = now.weekday()
     week_of_month = (now.day - 1) // 7 + 1
     month = now.month
 
-    if day_of_week < 5:  # Monday to Friday
+    if day_of_week < 5:
         channel_index = day_of_week
-    else:  # Saturday or Sunday
+    else:
         channel_index = week_of_month - 1
-        if month % 2 != 0:  # Odd month
+        if month % 2 != 0:
             channel_index = (channel_index + 1) % 5
-
-    print(channel_index)
 
     channel_id = CHANNEL_IDS[channel_index]
 
-    print(f"Using channel_id: {channel_id} for date: {now.strftime('%Y-%m-%d')}")
+    print(f"[GET_LATEST] 使用channel_id: {channel_id} 于日期: {now.strftime('%Y-%m-%d')}")
 
     try:
-        print(f"获取频道ID: {channel_id}")
+        print(f"[GET_LATEST] [{channel_id}] 获取频道信息")
 
         url = f"{PIPED_API_URL}/channel/{channel_id}"
         response = requests.get(url)
@@ -76,14 +71,13 @@ def get_latest_videos():
 
         for video in videos:
             video_id = video['url'].split('=')[-1]
-            duration = video.get('duration', 0)  # Get duration, default to 0 if not available
+            duration = video.get('duration', 0)
 
-            # Ignore videos longer than 10 minutes (900 seconds)
             if duration > 900:
-                print(f"忽略长视频: {video['title']} (时长: {duration} 秒)")
+                print(f"[GET_LATEST] [{video_id}] 忽略长视频: {video['title']} (时长: {duration} 秒)")
                 continue
             if duration < 0:
-                print(f"忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
+                print(f"[GET_LATEST] [{video_id}] 忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
                 continue
 
             c.execute("SELECT * FROM videos WHERE channel_id=? AND video_id=?", (channel_id, video_id))
@@ -93,29 +87,25 @@ def get_latest_videos():
                 description = video.get('shortDescription', '')
                 downloaded = 0
 
-                print(f"发现新视频!")
-                print(f"频道: {channel_title}")
-                print(f"标题: {video_title}")
-                print(f"视频ID: {video_id}")
-                print(f"发布时间: {published_at}")
-                print(f"时长: {duration} 秒")
-                print(f"描述: {description}")
-                print("---")
+                print(f"[GET_LATEST] [{video_id}] 发现新视频!")
+                print(f"[GET_LATEST] [{video_id}] 频道: {channel_title}")
+                print(f"[GET_LATEST] [{video_id}] 标题: {video_title}")
+                print(f"[GET_LATEST] [{video_id}] 发布时间: {published_at}")
+                print(f"[GET_LATEST] [{video_id}] 时长: {duration} 秒")
+                print(f"[GET_LATEST] [{video_id}] 描述: {description}")
 
                 c.execute(
                     "INSERT INTO videos (channel_id, video_id, title, published_at, channel_title, downloaded, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (channel_id, video_id, video_title, published_at, channel_title, downloaded, duration,
-                     description))
+                    (channel_id, video_id, video_title, published_at, channel_title, downloaded, duration, description))
                 conn.commit()
             else:
-                print(f"检查时间: {datetime.now()} - 视频 {video_id} 已存在于数据库中")
+                print(f"[GET_LATEST] [{video_id}] 视频已存在于数据库中")
 
         if not videos:
-            print(f"检查时间: {datetime.now()} - 频道 {channel_id} 没有新视频")
+            print(f"[GET_LATEST] [{channel_id}] 没有新视频")
 
     except Exception as e:
-        print(e)
-        print(f"检查频道 {channel_id} 时发生错误: {str(e)}")
+        print(f"[GET_LATEST] [{channel_id}] 检查频道时发生错误: {str(e)}")
 
     conn.close()
 
@@ -125,39 +115,32 @@ def download_videos():
     c = conn.cursor()
 
     try:
-        # 获取所有未下载的视频
         c.execute("SELECT channel_id, video_id, title, published_at, channel_title FROM videos WHERE downloaded = 0")
         undownloaded_videos = c.fetchall()
 
         for video in undownloaded_videos:
             channel_id, video_id, video_title, published_at, channel_title = video
 
-            print(f"处理未下载的视频:")
-            print(f"频道: {channel_title}")
-            print(f"标题: {video_title}")
-            print(f"视频ID: {video_id}")
-            print(f"发布时间: {published_at}")
-
-            # 在这里添加下载和处理视频的代码
-            # 例如：download_and_process_video(video_id)
+            print(f"[DOWNLOAD] [{video_id}] 处理未下载的视频:")
+            print(f"[DOWNLOAD] [{video_id}] 频道: {channel_title}")
+            print(f"[DOWNLOAD] [{video_id}] 标题: {video_title}")
+            print(f"[DOWNLOAD] [{video_id}] 发布时间: {published_at}")
 
             video_url = f"https://www.youtube.com/watch?v={video_id}"
             try:
                 save_path = f"output/{video_id}"
                 step1_ytdlp.download_video_ytdlp(video_url, save_path)
-                # 如果下载成功，将downloaded设置为1
                 c.execute("UPDATE videos SET downloaded = 1, save_path = ? WHERE video_id = ?", (save_path, video_id))
-                print(f"视频 {video_id} 下载成功")
+                print(f"[DOWNLOAD] [{video_id}] 下载成功")
             except Exception as e:
-                # 如果出现下载错误，将downloaded设置为2
                 c.execute("UPDATE videos SET downloaded = 2 WHERE video_id = ?", (video_id,))
-                print(f"下载视频 {video_id} 时发生错误: {str(e)}")
+                print(f"[DOWNLOAD] [{video_id}] 下载时发生错误: {str(e)}")
             conn.commit()
     except Exception as e:
         import traceback
-        print("Stacktrace:")
+        print("[DOWNLOAD] Stacktrace:")
         print(traceback.format_exc())
-        print(f"处理未下载视频时发生错误: {str(e)}")
+        print(f"[DOWNLOAD] 处理未下载视频时发生错误: {str(e)}")
     finally:
         conn.close()
 
@@ -167,7 +150,6 @@ def process_videos():
     c = conn.cursor()
 
     try:
-        # 获取所有已下载但未处理的视频
         c.execute(
             "SELECT channel_id, video_id, title, published_at, channel_title, downloaded, save_path FROM videos WHERE downloaded = 1 AND processed = 0")
         unprocessed_videos = c.fetchall()
@@ -175,41 +157,42 @@ def process_videos():
         for video in unprocessed_videos:
             channel_id, video_id, video_title, published_at, channel_title, downloaded, save_path = video
 
-            print(f"处理已下载但未处理的视频:")
-            print(f"频道: {channel_title}")
-            print(f"标题: {video_title}")
-            print(f"视频ID: {video_id}")
-            print(f"保存路径: {save_path}")
+            print(f"[PROCESS] [{video_id}] 处理已下载但未处理的视频:")
+            print(f"[PROCESS] [{video_id}] 频道: {channel_title}")
+            print(f"[PROCESS] [{video_id}] 标题: {video_title}")
+            print(f"[PROCESS] [{video_id}] 保存路径: {save_path}")
 
-            # 查找视频文件
             video_file = step1_ytdlp.find_video_files(save_path)
             if not video_file:
-                print(f"无法找到视频文件: {video_id}")
+                print(f"[PROCESS] [{video_id}] 无法找到视频文件")
                 continue
 
             try:
-
-                print(f"开始处理视频: {video_title}")
+                print(f"[PROCESS] [{video_id}] 开始处理视频")
 
                 step2_whisper.transcribe(save_path)
+                print(f"[PROCESS] [{video_id}] 转录完成")
 
                 step3_1_spacy_split.split_by_spacy()
                 step3_2_splitbymeaning.split_sentences_by_meaning()
+                print(f"[PROCESS] [{video_id}] 分句完成")
 
                 step4_1_summarize.get_summary()
                 from config import PAUSE_BEFORE_TRANSLATE
                 if PAUSE_BEFORE_TRANSLATE:
-                    input(
-                        "⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
+                    input(f"[PROCESS] [{video_id}] ⚠️ PAUSE_BEFORE_TRANSLATE. Go to `output/log/terminology.json` to edit terminology. Then press ENTER to continue...")
                 step4_2_translate_all.translate_all()
+                print(f"[PROCESS] [{video_id}] 翻译完成")
 
                 step5_splitforsub.split_for_sub_main()
                 step6_generate_final_timeline.align_timestamp_main()
+                print(f"[PROCESS] [{video_id}] 字幕时间轴生成完成")
 
                 step7_merge_sub_to_vid.merge_subtitles_to_video(save_path)
+                print(f"[PROCESS] [{video_id}] 字幕合并到视频完成")
 
                 def cleanup_and_move_files(video_id, save_path):
-                    print(f"开始清理和移动文件...")
+                    print(f"[PROCESS] [{video_id}] 开始清理和移动文件...")
 
                     # Create history directory for this video
                     history_dir = os.path.join('history', video_id)
@@ -265,13 +248,13 @@ def process_videos():
                 c.execute("UPDATE videos SET processed = 1 WHERE video_id = ?", (video_id,))
                 conn.commit()
 
-                print(f"视频处理完成: {video_title}")
+                print(f"[PROCESS] [{video_id}] 视频处理完成")
             except Exception as e:
-                print(f"处理视频 {video_id} 时发生错误: {str(e)}")
+                print(f"[PROCESS] [{video_id}] 处理时发生错误: {str(e)}")
                 c.execute("UPDATE videos SET processed = 2 WHERE video_id = ?", (video_id,))
                 conn.commit()
     except Exception as e:
-        conn.commit()
+        print(f"[PROCESS] 处理视频时发生错误: {str(e)}")
     finally:
         conn.close()
 
@@ -321,35 +304,37 @@ def get_tweet_text(video_id, limit_to_280=False):
         return None
 
 
-def send_single_tweet(c, conn, video):
+def send_single_tweet(c, conn, video, source="regular"):
     channel_id, video_id, title, published_at, channel_title, duration = video
     video_path = f'history/{video_id}/output_video_with_subs.mp4'
 
     tweet_textes = get_tweet_text(video_id, duration >= 600)
-    print(tweet_textes)
+    print(f"[{source.upper()}] [{video_id}] 获取到的推文文本: {tweet_textes}")
     if len(tweet_textes) == 0:
-        print(f"无法获取推文文本，跳过推文: {video_id}")
+        print(f"[{source.upper()}] [{video_id}] 无法获取推文文本，跳过推文")
         c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
         conn.commit()
         return
 
     try:
         if duration >= 600:
+            print(f"[{source.upper()}] [{video_id}] 使用 Twikit Client 发送推文...")
             tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes[0], video_path))
         else:
+            print(f"[{source.upper()}] [{video_id}] 使用 X API Client 发送推文...")
             tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
 
         if not tweet_id:
-            print(f"使用 X API Client 发送失败，尝试使用 Twitter API Client...")
+            print(f"[{source.upper()}] [{video_id}] 使用 X API Client 发送失败，尝试使用 Twitter API Client...")
             tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes[0], video_path)
 
             if not tweet_id:
-                print(f"使用 Twitter API Client 也失败，等待60秒后重试 Twitter API Client...")
+                print(f"[{source.upper()}] [{video_id}] 使用 Twitter API Client 也失败，等待60秒后重试 X API Client...")
                 time.sleep(60)
                 tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
 
         if not tweet_id:
-            print(f"所有尝试都失败，将视频 {video_id} 标记为发送失败")
+            print(f"[{source.upper()}] [{video_id}] 所有尝试都失败，将视频标记为发送失败")
             c.execute("SELECT twitter FROM videos WHERE video_id = ?", (video_id,))
             current_value = c.fetchone()[0]
             new_value = 3 if current_value < 3 else current_value + 1
@@ -357,9 +342,9 @@ def send_single_tweet(c, conn, video):
         else:
             c.execute("UPDATE videos SET twitter = ? WHERE video_id = ?", (tweet_id, video_id,))
             conn.commit()
-            print(f"数据库更新成功，视频 {video_id} 标记为已发送推文")
+            print(f"[{source.upper()}] [{video_id}] 数据库更新成功，视频标记为已发送推文")
     except Exception as e:
-        print(f"发送推文时出错: {e}")
+        print(f"[{source.upper()}] [{video_id}] 发送推文时出错: {e}")
         c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
         conn.commit()
 
@@ -372,7 +357,7 @@ def post_twitters():
     videos = c.fetchall()
 
     for video in videos:
-        send_single_tweet(c, conn, video)
+        send_single_tweet(c, conn, video, source="post_twitters")
 
     conn.close()
     
@@ -386,8 +371,8 @@ def retry_failed_tweets():
     failed_tweets = c.fetchall()
 
     for video in failed_tweets:
-        print(f"重试发送推文: {video[1]}")
-        send_single_tweet(c, conn, video)
+        print(f"[RETRY] 重试发送推文: {video[1]}")
+        send_single_tweet(c, conn, video, source="retry_failed_tweets")
         time.sleep(5)
 
     conn.close()
@@ -399,35 +384,32 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
         from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, \
             TWITTER_BEARER_TOKEN, TWITTER_MEDIA_ADDITIONAL_OWNERS
 
-        # Authenticate to Twitter using OAuth 2.0
+        print(f"[X API Client] [{video_id}] 开始发送推文...")
+        auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+        auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
+        api = tweepy.API(auth)
+
+        print(f"[X API Client] [{video_id}] 正在上传视频: {video_path}")
+        media = api.media_upload(video_path, media_category="amplify_video", chunked=True,
+                                 additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+        print(f"[X API Client] [{video_id}] 视频上传成功，media_id: {media.media_id_string}")
+
+        # wait for 4 seconds
+        time.sleep(4)
+
+        print(f"[X API Client] [{video_id}] 正在发送推文，文本内容: {tweet_text[:50]}...")
         client = tweepy.Client(
             consumer_key=TWITTER_API_KEY,
             consumer_secret=TWITTER_API_SECRET,
             access_token=TWITTER_ACCESS_TOKEN,
             access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-            # bearer_token=TWITTER_BEARER_TOKEN
         )
-
-        print(f"开始为视频 {video_id} 发送推文...")
-        auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
-        auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
-        api = tweepy.API(auth)
-
-        print(f"正在上传视频: {video_path}")
-        media = api.media_upload(video_path, media_category="amplify_video", chunked=True,
-                                 additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
-        print(f"视频上传成功，media_id: {media.media_id_string}")
-
-        # wait for 4 seconds
-        time.sleep(4)
-
-        print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
         tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
                                     media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
-        print(f"推文发送成功，tweet_id: {tweet.data['id']}")
+        print(f"[X API Client] [{video_id}] 推文发送成功，tweet_id: {tweet.data['id']}")
         return tweet.data['id']
     except Exception as e:
-        print(e)
+        print(f"[X API Client] [{video_id}] 错误: {e}")
         return None
 
 def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
@@ -435,15 +417,15 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         from twitter.account import Account
         from config import TWITTER_COOKIES_CT0, TWITTER_COOKIES_AUTH_TOKEN
 
-        print(f"开始为视频 {video_id} 发送推文...")
+        print(f"[Twitter API Client] [{video_id}] 开始发送推文...")
 
-        print("正在初始化Twitter账户...")
+        print(f"[Twitter API Client] [{video_id}] 正在初始化Twitter账户...")
         account = Account(cookies={
             "ct0": TWITTER_COOKIES_CT0,
             "auth_token": TWITTER_COOKIES_AUTH_TOKEN
         },
             debug=True)
-        print("Twitter账户初始化成功")
+        print(f"[Twitter API Client] [{video_id}] Twitter账户初始化成功")
 
         res = account.tweet(tweet_text, media=[
             {
@@ -454,40 +436,40 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         ])
 
         if 'errors' in res:
-            print("推文发送失败，错误信息:")
+            print(f"[Twitter API Client] [{video_id}] 推文发送失败，错误信息:")
             for error in res['errors']:
-                print(f"错误代码: {error['code']}, 错误信息: {error['message']}")
+                print(f"[Twitter API Client] [{video_id}] 错误代码: {error['code']}, 错误信息: {error['message']}")
         else:
             tweet_id = res['data']['notetweet_create']['tweet_results']['result']['rest_id']
-            print(f"推文发送成功，tweet_id: {tweet_id}")
+            print(f"[Twitter API Client] [{video_id}] 推文发送成功，tweet_id: {tweet_id}")
             return tweet_id
     except Exception as e:
-        print(e)
+        print(f"[Twitter API Client] [{video_id}] 错误: {e}")
         return None
 
 async def post_twitters_twikit_client(video_id, tweet_text, video_path):
     try:
         from twikit import Client
 
-        print(f"开始为视频 {video_id} 发送推文...")
-        print("正在初始化 Twikit 客户端...")
+        print(f"[Twikit Client] [{video_id}] 开始发送推文...")
+        print(f"[Twikit Client] [{video_id}] 正在初始化 Twikit 客户端...")
         client = Client('en-US')
         client.load_cookies('cookies.json')
-        print("Twikit 客户端初始化成功")
+        print(f"[Twikit Client] [{video_id}] Twikit 客户端初始化成功")
 
-        print(f"正在上传视频: {video_path}")
+        print(f"[Twikit Client] [{video_id}] 正在上传视频: {video_path}")
         media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True,
                                              wait_for_completion=True)
-        print(f"视频上传成功，media_id: {media_id}")
+        print(f"[Twikit Client] [{video_id}] 视频上传成功，media_id: {media_id}")
 
-        print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
+        print(f"[Twikit Client] [{video_id}] 正在发送推文，文本内容: {tweet_text[:50]}...")
         tweet = await client.create_tweet(tweet_text, media_ids=[media_id], is_note_tweet=True)
 
         tweet_id = tweet.id
-        print(f"推文发送成功，tweet_id: {tweet_id}")
+        print(f"[Twikit Client] [{video_id}] 推文发送成功，tweet_id: {tweet_id}")
         return tweet_id
     except Exception as e:
-        print(e)
+        print(f"[Twikit Client] [{video_id}] 错误: {e}")
         return None
 
 def run_scheduler():
