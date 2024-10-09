@@ -31,40 +31,6 @@ def init_db():
     conn.close()
 
 
-# def get_channel_id(youtube, channel_handle):
-#     try:
-#         request = youtube.search().list(
-#             part="snippet",
-#             type="channel",
-#             q=channel_handle
-#         )
-#         response = request.execute()
-
-#         if response['items']:
-#             return response['items'][0]['snippet']['channelId']
-#         else:
-#             print(f"No channel found for handle: {channel_handle}")
-#             return None
-#     except Exception as e:
-#         print(f"Error getting channel ID for {channel_handle}: {e}")
-#         return None
-
-# # 预处理CHANNEL_IDS
-# def preprocess_channel_ids():
-#     raw_ids = YOUTUBE_RAW_CHANNEL_IDS
-#     for channel in raw_ids:
-#         if channel.startswith('@'):
-#             channel_id = get_channel_id(youtube, channel)
-#             if channel_id:
-#                 CHANNEL_IDS.append(channel_id)
-#             else:
-#                 print(f"无法获取频道ID: {channel}")
-#         else:
-#             CHANNEL_IDS.append(channel)
-
-# # 在主程序开始时调用预处理函数
-# preprocess_channel_ids()
-
 import requests
 from datetime import datetime
 import time
@@ -76,63 +42,80 @@ def get_latest_videos():
     conn = sqlite3.connect('youtube_videos.db')
     c = conn.cursor()
 
-    for channel_id in CHANNEL_IDS:
-        try:
-            print(f"获取频道ID: {channel_id}")
+    # Get the current date and time
+    now = datetime.now()
 
-            url = f"{PIPED_API_URL}/channel/{channel_id}"
-            response = requests.get(url)
-            response.raise_for_status()
-            channel_data = response.json()
+    # Determine which channel_id to use based on the day of the week and week of the month
+    day_of_week = now.weekday()  # Monday is 0, Sunday is 6
+    week_of_month = (now.day - 1) // 7 + 1
+    month = now.month
 
-            channel_title = channel_data['name']
-            videos = channel_data['relatedStreams'][:10]
+    if day_of_week < 5:  # Monday to Friday
+        channel_index = day_of_week
+    else:  # Saturday or Sunday
+        channel_index = week_of_month - 1
+        if month % 2 != 0:  # Odd month
+            channel_index = (channel_index + 1) % 5
 
-            for video in videos:
-                video_id = video['url'].split('=')[-1]
-                duration = video.get('duration', 0)  # Get duration, default to 0 if not available
+    print(channel_index)
 
-                # Ignore videos longer than 10 minutes (900 seconds)
-                if duration > 900:
-                    print(f"忽略长视频: {video['title']} (时长: {duration} 秒)")
-                    continue
-                if duration < 0:
-                    print(f"忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
-                    continue
+    channel_id = CHANNEL_IDS[channel_index]
 
-                c.execute("SELECT * FROM videos WHERE channel_id=? AND video_id=?", (channel_id, video_id))
-                if c.fetchone() is None:
-                    video_title = video['title']
-                    published_at = datetime.fromtimestamp(video['uploaded'] / 1000).isoformat()
-                    description = video.get('shortDescription', '')
-                    downloaded = 0
+    print(f"Using channel_id: {channel_id} for date: {now.strftime('%Y-%m-%d')}")
 
-                    print(f"发现新视频!")
-                    print(f"频道: {channel_title}")
-                    print(f"标题: {video_title}")
-                    print(f"视频ID: {video_id}")
-                    print(f"发布时间: {published_at}")
-                    print(f"时长: {duration} 秒")
-                    print(f"描述: {description}")
-                    print("---")
+    try:
+        print(f"获取频道ID: {channel_id}")
 
-                    c.execute(
-                        "INSERT INTO videos (channel_id, video_id, title, published_at, channel_title, downloaded, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (channel_id, video_id, video_title, published_at, channel_title, downloaded, duration,
-                         description))
-                    conn.commit()
-                else:
-                    print(f"检查时间: {datetime.now()} - 视频 {video_id} 已存在于数据库中")
+        url = f"{PIPED_API_URL}/channel/{channel_id}"
+        response = requests.get(url)
+        response.raise_for_status()
+        channel_data = response.json()
 
-            if not videos:
-                print(f"检查时间: {datetime.now()} - 频道 {channel_id} 没有新视频")
+        channel_title = channel_data['name']
+        videos = channel_data['relatedStreams'][:10]
 
-        except Exception as e:
-            print(e)
-            print(f"检查频道 {channel_id} 时发生错误: {str(e)}")
+        for video in videos:
+            video_id = video['url'].split('=')[-1]
+            duration = video.get('duration', 0)  # Get duration, default to 0 if not available
 
-        # Add a delay to avoid overwhelming the Piped API
-        time.sleep(2)
+            # Ignore videos longer than 10 minutes (900 seconds)
+            if duration > 900:
+                print(f"忽略长视频: {video['title']} (时长: {duration} 秒)")
+                continue
+            if duration < 0:
+                print(f"忽略时长为负数，可能是直播的视频: {video['title']} (时长: {duration} 秒)")
+                continue
+
+            c.execute("SELECT * FROM videos WHERE channel_id=? AND video_id=?", (channel_id, video_id))
+            if c.fetchone() is None:
+                video_title = video['title']
+                published_at = datetime.fromtimestamp(video['uploaded'] / 1000).isoformat()
+                description = video.get('shortDescription', '')
+                downloaded = 0
+
+                print(f"发现新视频!")
+                print(f"频道: {channel_title}")
+                print(f"标题: {video_title}")
+                print(f"视频ID: {video_id}")
+                print(f"发布时间: {published_at}")
+                print(f"时长: {duration} 秒")
+                print(f"描述: {description}")
+                print("---")
+
+                c.execute(
+                    "INSERT INTO videos (channel_id, video_id, title, published_at, channel_title, downloaded, duration, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (channel_id, video_id, video_title, published_at, channel_title, downloaded, duration,
+                     description))
+                conn.commit()
+            else:
+                print(f"检查时间: {datetime.now()} - 视频 {video_id} 已存在于数据库中")
+
+        if not videos:
+            print(f"检查时间: {datetime.now()} - 频道 {channel_id} 没有新视频")
+
+    except Exception as e:
+        print(e)
+        print(f"检查频道 {channel_id} 时发生错误: {str(e)}")
 
     conn.close()
 
@@ -395,92 +378,101 @@ def post_twitters():
 
 
 def post_twitters_x_api_client(video_id, tweet_text, video_path):
-    import tweepy
-    from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, \
-        TWITTER_BEARER_TOKEN, TWITTER_MEDIA_ADDITIONAL_OWNERS
+    try:
+        import tweepy
+        from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, \
+            TWITTER_BEARER_TOKEN, TWITTER_MEDIA_ADDITIONAL_OWNERS
 
-    # Authenticate to Twitter using OAuth 2.0
-    client = tweepy.Client(
-        consumer_key=TWITTER_API_KEY,
-        consumer_secret=TWITTER_API_SECRET,
-        access_token=TWITTER_ACCESS_TOKEN,
-        access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-        # bearer_token=TWITTER_BEARER_TOKEN
-    )
+        # Authenticate to Twitter using OAuth 2.0
+        client = tweepy.Client(
+            consumer_key=TWITTER_API_KEY,
+            consumer_secret=TWITTER_API_SECRET,
+            access_token=TWITTER_ACCESS_TOKEN,
+            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
+            # bearer_token=TWITTER_BEARER_TOKEN
+        )
 
-    print(f"开始为视频 {video_id} 发送推文...")
-    auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
-    auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
-    api = tweepy.API(auth)
+        print(f"开始为视频 {video_id} 发送推文...")
+        auth = tweepy.OAuthHandler(TWITTER_API_KEY, TWITTER_API_SECRET)
+        auth.set_access_token(TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET)
+        api = tweepy.API(auth)
 
-    print(f"正在上传视频: {video_path}")
-    media = api.media_upload(video_path, media_category="amplify_video", chunked=True,
-                             additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
-    print(f"视频上传成功，media_id: {media.media_id_string}")
+        print(f"正在上传视频: {video_path}")
+        media = api.media_upload(video_path, media_category="amplify_video", chunked=True,
+                                 additional_owners=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+        print(f"视频上传成功，media_id: {media.media_id_string}")
 
-    # wait for 4 seconds
-    time.sleep(4)
+        # wait for 4 seconds
+        time.sleep(4)
 
-    print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
-    tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
-                                media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
-    print(f"推文发送成功，tweet_id: {tweet.data['id']}")
-    return tweet.data['id']
-
+        print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
+        tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
+                                    media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
+        print(f"推文发送成功，tweet_id: {tweet.data['id']}")
+        return tweet.data['id']
+    except Exception as e:
+        print(e)
+        return None
 
 def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
-    from twitter.account import Account
-    from config import TWITTER_COOKIES_CT0, TWITTER_COOKIES_AUTH_TOKEN
+    try:
+        from twitter.account import Account
+        from config import TWITTER_COOKIES_CT0, TWITTER_COOKIES_AUTH_TOKEN
 
-    print(f"开始为视频 {video_id} 发送推文...")
+        print(f"开始为视频 {video_id} 发送推文...")
 
-    print("正在初始化Twitter账户...")
-    account = Account(cookies={
-        "ct0": TWITTER_COOKIES_CT0,
-        "auth_token": TWITTER_COOKIES_AUTH_TOKEN
-    },
-        debug=True)
-    print("Twitter账户初始化成功")
+        print("正在初始化Twitter账户...")
+        account = Account(cookies={
+            "ct0": TWITTER_COOKIES_CT0,
+            "auth_token": TWITTER_COOKIES_AUTH_TOKEN
+        },
+            debug=True)
+        print("Twitter账户初始化成功")
 
-    res = account.tweet(tweet_text, media=[
-        {
-            "media": video_path,
-            "media_category": "amplify_video",
-            "tagged_users": TWITTER_MEDIA_ADDITIONAL_OWNERS
-        }
-    ])
+        res = account.tweet(tweet_text, media=[
+            {
+                "media": video_path,
+                "media_category": "amplify_video",
+                "tagged_users": TWITTER_MEDIA_ADDITIONAL_OWNERS
+            }
+        ])
 
-    if 'errors' in res:
-        print("推文发送失败，错误信息:")
-        for error in res['errors']:
-            print(f"错误代码: {error['code']}, 错误信息: {error['message']}")
-    else:
-        tweet_id = res['data']['notetweet_create']['tweet_results']['result']['rest_id']
-        print(f"推文发送成功，tweet_id: {tweet_id}")
-        return tweet_id
-
+        if 'errors' in res:
+            print("推文发送失败，错误信息:")
+            for error in res['errors']:
+                print(f"错误代码: {error['code']}, 错误信息: {error['message']}")
+        else:
+            tweet_id = res['data']['notetweet_create']['tweet_results']['result']['rest_id']
+            print(f"推文发送成功，tweet_id: {tweet_id}")
+            return tweet_id
+    except Exception as e:
+        print(e)
+        return None
 
 async def post_twitters_twikit_client(video_id, tweet_text, video_path):
-    from twikit import Client
+    try:
+        from twikit import Client
 
-    print(f"开始为视频 {video_id} 发送推文...")
-    print("正在初始化 Twikit 客户端...")
-    client = Client('en-US')
-    client.load_cookies('cookies.json')
-    print("Twikit 客户端初始化成功")
+        print(f"开始为视频 {video_id} 发送推文...")
+        print("正在初始化 Twikit 客户端...")
+        client = Client('en-US')
+        client.load_cookies('cookies.json')
+        print("Twikit 客户端初始化成功")
 
-    print(f"正在上传视频: {video_path}")
-    media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True,
-                                         wait_for_completion=True)
-    print(f"视频上传成功，media_id: {media_id}")
+        print(f"正在上传视频: {video_path}")
+        media_id = await client.upload_media(video_path, media_category="amplify_video", is_long_video=True,
+                                             wait_for_completion=True)
+        print(f"视频上传成功，media_id: {media_id}")
 
-    print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
-    tweet = await client.create_tweet(tweet_text, media_ids=[media_id], is_note_tweet=True)
+        print(f"正在发送推文，文本内容: {tweet_text[:50]}...")
+        tweet = await client.create_tweet(tweet_text, media_ids=[media_id], is_note_tweet=True)
 
-    tweet_id = tweet.id
-    print(f"推文发送成功，tweet_id: {tweet_id}")
-    return tweet_id
-
+        tweet_id = tweet.id
+        print(f"推文发送成功，tweet_id: {tweet_id}")
+        return tweet_id
+    except Exception as e:
+        print(e)
+        return None
 
 def run_scheduler():
     # 初始化数据库
