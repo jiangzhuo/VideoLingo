@@ -312,26 +312,26 @@ def send_single_tweet(c, conn, video, source="regular"):
     print(f"[{source.upper()}] [{video_id}] 获取到的推文文本: {tweet_textes}")
     if len(tweet_textes) == 0:
         print(f"[{source.upper()}] [{video_id}] 无法获取推文文本，跳过推文")
-        c.execute("UPDATE videos SET twitter = 3 WHERE video_id = ?", (video_id,))  # 3表示无法获取推文文本
+        c.execute("UPDATE videos SET twitter = 2 WHERE video_id = ?", (video_id,))
         conn.commit()
         return
 
     try:
         if duration >= 600:
             print(f"[{source.upper()}] [{video_id}] 使用 Twikit Client 发送推文...")
-            tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes[0], video_path))
+            tweet_id = asyncio.run(post_twitters_twikit_client(video_id, tweet_textes, video_path))
         else:
             print(f"[{source.upper()}] [{video_id}] 使用 X API Client 发送推文...")
-            tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
+            tweet_id = post_twitters_x_api_client(video_id, tweet_textes, video_path)
 
         if not tweet_id:
             print(f"[{source.upper()}] [{video_id}] 使用 X API Client 发送失败，尝试使用 Twitter API Client...")
-            tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes[0], video_path)
+            tweet_id = post_twitters_twitter_api_client(video_id, tweet_textes, video_path)
 
             if not tweet_id:
                 print(f"[{source.upper()}] [{video_id}] 使用 Twitter API Client 也失败，等待60秒后重试 X API Client...")
                 time.sleep(60)
-                tweet_id = post_twitters_x_api_client(video_id, tweet_textes[0], video_path)
+                tweet_id = post_twitters_x_api_client(video_id, tweet_textes, video_path)
 
         if not tweet_id:
             print(f"[{source.upper()}] [{video_id}] 所有尝试都失败，将视频标记为发送失败")
@@ -378,7 +378,8 @@ def retry_failed_tweets():
     conn.close()
 
 
-def post_twitters_x_api_client(video_id, tweet_text, video_path):
+def post_twitters_x_api_client(video_id, tweet_textes, video_path):
+    tweet_text = tweet_textes[0]
     try:
         import tweepy
         from config import TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_TOKEN_SECRET, \
@@ -407,12 +408,20 @@ def post_twitters_x_api_client(video_id, tweet_text, video_path):
         tweet = client.create_tweet(text=tweet_text, media_ids=[media.media_id_string],
                                     media_tagged_user_ids=TWITTER_MEDIA_ADDITIONAL_OWNERS)
         print(f"[X API Client] [{video_id}] 推文发送成功，tweet_id: {tweet.data['id']}")
+        
+        # Check if there's a second tweet text
+        if len(tweet_textes) > 1:
+            reply_text = tweet_textes[1]
+            print(f"[X API Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
+            reply = client.create_tweet(text=reply_text, in_reply_to_tweet_id=tweet.data['id'])
+            print(f"[X API Client] [{video_id}] 回复推文发送成功，reply_id: {reply.data['id']}")
         return tweet.data['id']
     except Exception as e:
         print(f"[X API Client] [{video_id}] 错误: {e}")
         return None
 
-def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
+def post_twitters_twitter_api_client(video_id, tweet_textes, video_path):
+    tweet_text = tweet_textes[0]
     try:
         from twitter.account import Account
         from config import TWITTER_COOKIES_CT0, TWITTER_COOKIES_AUTH_TOKEN
@@ -442,12 +451,28 @@ def post_twitters_twitter_api_client(video_id, tweet_text, video_path):
         else:
             tweet_id = res['data']['notetweet_create']['tweet_results']['result']['rest_id']
             print(f"[Twitter API Client] [{video_id}] 推文发送成功，tweet_id: {tweet_id}")
+            # Check if there's a second tweet text
+            if len(tweet_textes) > 1:
+                reply_text = tweet_textes[1]
+                print(f"[Twitter API Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
+                try:
+                    reply = account.tweet(reply_text, in_reply_to_tweet_id=tweet_id)
+                    if 'errors' in reply:
+                        print(f"[Twitter API Client] [{video_id}] 回复推文发送失败，错误信息:")
+                        for error in reply['errors']:
+                            print(f"[Twitter API Client] [{video_id}] 错误代码: {error['code']}, 错误信息: {error['message']}")
+                    else:
+                        reply_id = reply['data']['notetweet_create']['tweet_results']['result']['rest_id']
+                        print(f"[Twitter API Client] [{video_id}] 回复推文发送成功，reply_id: {reply_id}")
+                except Exception as e:
+                    print(f"[Twitter API Client] [{video_id}] 发送回复推文时出错: {e}")
             return tweet_id
     except Exception as e:
         print(f"[Twitter API Client] [{video_id}] 错误: {e}")
         return None
 
-async def post_twitters_twikit_client(video_id, tweet_text, video_path):
+async def post_twitters_twikit_client(video_id, tweet_textes, video_path):
+    tweet_text = tweet_textes[0]
     try:
         from twikit import Client
 
@@ -467,6 +492,12 @@ async def post_twitters_twikit_client(video_id, tweet_text, video_path):
 
         tweet_id = tweet.id
         print(f"[Twikit Client] [{video_id}] 推文发送成功，tweet_id: {tweet_id}")
+        # Check if there's a second tweet text
+        if len(tweet_textes) > 1:
+            reply_text = tweet_textes[1]
+            print(f"[Twikit Client] [{video_id}] 正在发送回复推文，文本内容: {reply_text[:50]}...")
+            reply = await client.create_tweet(reply_text, in_reply_to_tweet_id=tweet.id)
+            print(f"[Twikit Client] [{video_id}] 回复推文发送成功，reply_id: {reply.id}")
         return tweet_id
     except Exception as e:
         print(f"[Twikit Client] [{video_id}] 错误: {e}")
