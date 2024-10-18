@@ -27,9 +27,9 @@ def search_things_to_note_in_prompt(sentence):
     else:
         return None
 
-def get_summary():
+def get_summary(content_description=""):
     src_content = combine_chunks()
-    summary_prompt = get_summary_prompt(src_content)
+    summary_prompt = get_summary_prompt(src_content, content_description)
     print("📝 Summarizing... Please wait a moment...")
     def valid_summary(response_data):
         # check if the terms is in the response_data

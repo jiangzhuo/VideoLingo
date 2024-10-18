@@ -67,7 +67,7 @@ def get_latest_videos():
         channel_data = response.json()
 
         channel_title = channel_data['name']
-        videos = channel_data['relatedStreams'][:10]
+        videos = channel_data['relatedStreams'][:1]
 
         for video in videos:
             video_id = video['url'].split('=')[-1]
@@ -152,11 +152,11 @@ def process_videos():
 
     try:
         c.execute(
-            "SELECT channel_id, video_id, title, published_at, channel_title, downloaded, save_path FROM videos WHERE downloaded = 1 AND processed = 0")
+            "SELECT channel_id, video_id, title, published_at, channel_title, downloaded, save_path, description FROM videos WHERE downloaded = 1 AND processed = 0")
         unprocessed_videos = c.fetchall()
 
         for video in unprocessed_videos:
-            channel_id, video_id, video_title, published_at, channel_title, downloaded, save_path = video
+            channel_id, video_id, video_title, published_at, channel_title, downloaded, save_path, description = video
 
             print(f"[PROCESS] [{video_id}] 处理已下载但未处理的视频:")
             print(f"[PROCESS] [{video_id}] 频道: {channel_title}")
@@ -178,7 +178,7 @@ def process_videos():
                 step3_2_splitbymeaning.split_sentences_by_meaning()
                 print(f"[PROCESS] [{video_id}] 分句完成")
 
-                step4_1_summarize.get_summary()
+                step4_1_summarize.get_summary(description)
                 from config import PAUSE_BEFORE_TRANSLATE
                 if PAUSE_BEFORE_TRANSLATE:
                     input(

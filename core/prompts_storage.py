@@ -46,7 +46,7 @@ Please provide your answer in the following JSON format, <<>> represents placeho
 
 ## ================================================================
 # @ step4_1_summarize.py
-def get_summary_prompt(source_content):
+def get_summary_prompt(source_content, content_description=""):
     src_language = get_whisper_language()
     TARGET_LANGUAGE = load_key("target_language")
     summary_prompt = f"""
@@ -55,41 +55,41 @@ You are a professional video translation expert and terminology consultant. Your
 
 ### Task Description 
 For the provided original {src_language} video text, you need to:
-1. Summarize the video's main topic in a concise, Twitter-friendly paragraph (max 280 characters)
+1. Summarize the video's main topic in a concise, Twitter-friendly paragraph (max 280 characters) in {TARGET_LANGUAGE}
 2. Extract professional terms and names that appear in the video, and provide {TARGET_LANGUAGE} translations or suggest keeping the original language terms. Avoid extracting simple, common words.
-3. For each translated term or name, provide a brief explanation
+3. For each translated term or name, provide a brief explanation in {TARGET_LANGUAGE}
 
 ### Analysis and Summary Steps
 Please think in two steps, processing the text line by line:  
 1. Topic summarization:
    - Quickly skim through the entire text to understand the general idea
-   - Summarize the video's main topic in a concise, Twitter-friendly paragraph
+   - Summarize the video's main topic in a concise, Twitter-friendly paragraph in {TARGET_LANGUAGE}
 2. Term and name extraction:
    - Carefully read the entire text, marking professional terms and names
    - For each term or name, provide a {TARGET_LANGUAGE} translation or suggest keeping the original, only the word itself is needed, not the pronunciation
-   - Add a brief explanation for each term or name to help the translator understand
+   - Add a brief explanation in {TARGET_LANGUAGE} for each term or name to help the translator understand
    - If the word is a fixed abbreviation or a proper name, please keep the original.
 
 ### Output Format
 Please output your analysis results in the following JSON format, where <> represents placeholders:
 {{
-    "theme": "<Briefly summarize the theme of this video in Twitter-friendly paragraph (max 280 characters)>",
+    "theme": "<Briefly summarize the theme of this video in {TARGET_LANGUAGE} in a Twitter-friendly paragraph (max 280 characters)>",
     "terms": [
         {{
             "original": "<Term or name 1 in the {src_language}>",
             "translation": "<{TARGET_LANGUAGE} translation or keep original>",
-            "explanation": "<Brief explanation of the term or name>"
+            "explanation": "<Brief explanation of the term or name in {TARGET_LANGUAGE}>"
         }},
         {{
             "original": "<Term or name 2 in the {src_language}>",
             "translation": "<{TARGET_LANGUAGE} translation or keep original>",
-            "explanation": "<Brief explanation of the term or name>"
+            "explanation": "<Brief explanation of the term or name in {TARGET_LANGUAGE}>"
         }},
         ...
     ]
 }}
 
-### Single Output Example (Using French as an example)
+### Single Output Example (Using French as the target language)
 
 {{
     "theme": "Le musée du Louvre à Paris est l'un des plus célèbres et visités au monde. Situé au cœur de la capitale française, il abrite une vaste collection d'œuvres d'art représentant plusieurs millénaires d'histoire et de cultures diverses. Parmi les trésors emblématiques du musée figurent des chefs-d'œuvre comme La Joconde de Léonard de Vinci, la Vénus de Milo et la Victoire de Samothrace. L'architecture du Louvre, ancien palais royal, est également remarquable, notamment avec la pyramide de verre conçue par I.M. Pei. Le musée a évolué à travers les siècles, devenant un centre culturel majeur. Les visiteurs y découvrent une riche diversité d'expositions allant des antiquités égyptiennes aux peintures de la Renaissance, en passant par les sculptures grecques et romaines.",
@@ -117,10 +117,12 @@ Please output your analysis results in the following JSON format, where <> repre
 <video_text_to_summarize>
 {source_content}
 </video_text_to_summarize>
+
+### Content Description
+{content_description}
 """.strip()
 
     return summary_prompt
-
 ## ================================================================
 # @ step5_translate.py & translate_lines.py
 def generate_shared_prompt(previous_content_prompt, after_content_prompt, summary_prompt, things_to_note_prompt):
