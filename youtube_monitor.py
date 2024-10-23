@@ -15,6 +15,8 @@ from st_components.imports_and_utils import *
 # 要查询的YouTube频道ID列表
 CHANNEL_IDS = YOUTUBE_RAW_CHANNEL_IDS
 
+HOW_MANY_VIDEOS_TO_CHECK = 5
+
 # 创建YouTube API客户端
 youtube = build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
 
@@ -67,7 +69,7 @@ def get_latest_videos():
         channel_data = response.json()
 
         channel_title = channel_data['name']
-        videos = channel_data['relatedStreams'][:5]
+        videos = channel_data['relatedStreams'][:HOW_MANY_VIDEOS_TO_CHECK]
 
         for video in videos:
             video_id = video['url'].split('=')[-1]
@@ -512,6 +514,40 @@ async def post_twitters_twikit_client(video_id, tweet_textes, video_path):
         return None
 
 
+def watch_dog():
+    conn = sqlite3.connect('youtube_videos.db')
+    c = conn.cursor()
+
+    # Get the latest 5 videos
+    c.execute(f"SELECT processed FROM videos ORDER BY published_at DESC LIMIT {HOW_MANY_VIDEOS_TO_CHECK}")
+    latest_videos = c.fetchall()
+
+    # Count how many of the latest 5 videos have processed == 2
+    processed_count = sum(1 for video in latest_videos if video[0] == 2)
+
+    if processed_count >= 3:
+        print("[Watch Dog] 检测到最新5个视频中有3个或更多处理失败，正在清理输出文件夹...")
+        folders_to_delete = ['output/log', 'output/gpt_log', 'output/audio']
+        for folder in folders_to_delete:
+            if os.path.exists(folder):
+                try:
+                    shutil.rmtree(folder)
+                    print(f"[Watch Dog] 已删除文件夹: {folder}")
+                except Exception as e:
+                    print(f"[Watch Dog] 删除文件夹 {folder} 时出错: {e}")
+            else:
+                print(f"[Watch Dog] 文件夹不存在: {folder}")
+
+        # Update processed status from 2 to 3 for the failed videos
+        c.execute("UPDATE videos SET processed = 3 WHERE processed = 2")
+        conn.commit()
+        print("[Watch Dog] 已将处理失败的视频状态从2更新为3")
+    else:
+        print("[Watch Dog] 最新视频处理正常，无需清理")
+
+    conn.close()
+
+
 def run_scheduler():
     # 初始化数据库
     init_db()
@@ -526,6 +562,7 @@ def run_scheduler():
 
     # 每10分钟运行一次检查最新视频和处理未下载视频
     def check_and_process():
+        watch_dog()
         get_latest_videos()
         download_videos()
         process_videos()
