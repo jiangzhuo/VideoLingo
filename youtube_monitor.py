@@ -67,7 +67,7 @@ def get_latest_videos():
         channel_data = response.json()
 
         channel_title = channel_data['name']
-        videos = channel_data['relatedStreams'][:1]
+        videos = channel_data['relatedStreams'][:5]
 
         for video in videos:
             video_id = video['url'].split('=')[-1]
