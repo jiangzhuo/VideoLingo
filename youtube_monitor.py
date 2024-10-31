@@ -37,7 +37,7 @@ import requests
 from datetime import datetime
 import time
 
-PIPED_API_URL = "https://pipedapi-libre.kavin.rocks"
+PIPED_API_URLS = ["https://pipedapi-libre.kavin.rocks", "https://pipedapi.kavin.rocks", "https://pipedapi.leptons.xyz"]
 
 
 def get_latest_videos():
@@ -62,12 +62,37 @@ def get_latest_videos():
 
     try:
         print(f"[GET_LATEST] [{channel_id}] 获取频道信息")
-
-        url = f"{PIPED_API_URL}/channel/{channel_id}"
-        response = requests.get(url)
-        response.raise_for_status()
-        channel_data = response.json()
-
+        import ssl
+        from requests.adapters import HTTPAdapter
+        from requests.packages.urllib3.poolmanager import PoolManager
+        
+        class TlsAdapter(HTTPAdapter):
+            def __init__(self, *args, **kwargs):
+                self.poolmanager = None
+                super().__init__(*args, **kwargs)
+                
+            def init_poolmanager(self, *args, **kwargs):
+                ctx = ssl.create_default_context()
+                ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+                kwargs['ssl_context'] = ctx
+                self.poolmanager = PoolManager(*args, **kwargs)
+                return self.poolmanager
+        
+        session = requests.Session()
+        session.mount('https://', TlsAdapter())
+        
+        for PIPED_API_URL in PIPED_API_URLS:
+            try:
+                url = f"{PIPED_API_URL}/channel/{channel_id}"
+                response = session.get(url, verify=True,
+                                    headers={'User-Agent': 'Mozilla/5.0'})
+                response.raise_for_status()
+                channel_data = response.json()
+                break
+            except Exception as e:
+                print(f"[GET_LATEST] [{channel_id}] 从 {PIPED_API_URL} 获取频道信息时发生错误: {str(e)}")
+                continue
         channel_title = channel_data['name']
         videos = channel_data['relatedStreams'][:HOW_MANY_VIDEOS_TO_CHECK]
 
