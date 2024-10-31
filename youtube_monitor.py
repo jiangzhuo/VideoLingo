@@ -62,37 +62,19 @@ def get_latest_videos():
 
     try:
         print(f"[GET_LATEST] [{channel_id}] 获取频道信息")
-        import ssl
-        from requests.adapters import HTTPAdapter
-        from requests.packages.urllib3.poolmanager import PoolManager
-        
-        class TlsAdapter(HTTPAdapter):
-            def __init__(self, *args, **kwargs):
-                self.poolmanager = None
-                super().__init__(*args, **kwargs)
-                
-            def init_poolmanager(self, *args, **kwargs):
-                ctx = ssl.create_default_context()
-                ctx.set_ciphers('DEFAULT@SECLEVEL=1')
-                ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-                kwargs['ssl_context'] = ctx
-                self.poolmanager = PoolManager(*args, **kwargs)
-                return self.poolmanager
-        
-        session = requests.Session()
-        session.mount('https://', TlsAdapter())
-        
         for PIPED_API_URL in PIPED_API_URLS:
             try:
                 url = f"{PIPED_API_URL}/channel/{channel_id}"
-                response = session.get(url, verify=True,
-                                    headers={'User-Agent': 'Mozilla/5.0'})
+                session = requests.Session()
+                session.mount('https://', requests.adapters.HTTPAdapter())
+                response = session.get(url)
                 response.raise_for_status()
                 channel_data = response.json()
-                break
-            except Exception as e:
-                print(f"[GET_LATEST] [{channel_id}] 从 {PIPED_API_URL} 获取频道信息时发生错误: {str(e)}")
-                continue
+                break  # Exit the loop if the request is successful
+            except requests.RequestException as e:
+                print(f"[GET_LATEST] [{channel_id}] 使用 {PIPED_API_URL} 获取频道信息失败: {str(e)}")
+        else:
+            raise Exception(f"[GET_LATEST] [{channel_id}] 所有 PIPED API endpoints 都失败")
         channel_title = channel_data['name']
         videos = channel_data['relatedStreams'][:HOW_MANY_VIDEOS_TO_CHECK]
 
