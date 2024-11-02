@@ -58,7 +58,7 @@ def get_latest_videos():
 
     channel_id = CHANNEL_IDS[channel_index]
 
-    print(f"[GET_LATEST] 使用channel_id: {channel_id} 于日期: {now.strftime('%Y-%m-%d')}")
+    print(f"[GET_LATEST] 使用channel_id: {channel_id} 于日期: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
     try:
         print(f"[GET_LATEST] [{channel_id}] 获取频道信息")
@@ -81,8 +81,13 @@ def get_latest_videos():
         for video in videos:
             video_id = video['url'].split('=')[-1]
             duration = video.get('duration', 0)
+            uploaded = video.get('uploaded', 0)
 
-            if duration > 900:
+            # uploaded is in milliseconds, if it is more than now, it is a future video, skip it
+            if uploaded > int(time.time() * 1000):
+                print(f"[GET_LATEST] [{video_id}] 忽略未发布的视频: {video['title']} (发布时间: {datetime.fromtimestamp(uploaded / 1000).strftime('%Y-%m-%d %H:%M:%S')})")
+                continue
+            if duration > 1200:
                 print(f"[GET_LATEST] [{video_id}] 忽略长视频: {video['title']} (时长: {duration} 秒)")
                 continue
             if duration < 0:
